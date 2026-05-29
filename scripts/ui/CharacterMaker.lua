@@ -377,20 +377,35 @@ local function CreateAppearancePanel(art)
 
     return UI.Panel {
         width = "100%", height = "100%",
-        padding = 14, gap = 6,
-        overflow = "scroll",
+        overflow = "hidden",
         children = {
-            -- 模式切换（Pill Toggle）
-            UI.Panel {
-                width = "100%", flexDirection = "row", gap = 8, alignItems = "center",
+            UI.ScrollView {
+                scrollY = true,
+                bounces = false,
+                flexGrow = 1,
+                flexShrink = 1,
                 children = {
-                    UI.Label { text = "渲染模式", fontSize = 11, fontColor = {140,145,160,200}, marginRight = 4 },
-                    UI.Panel { flexGrow = 1, children = { modePill } },
+                    UI.Panel {
+                        width = "100%",
+                        flexShrink = 0,
+                        padding = 14,
+                        gap = 6,
+                        children = {
+                            -- 模式切换（Pill Toggle）
+                            UI.Panel {
+                                width = "100%", flexDirection = "row", gap = 8, alignItems = "center",
+                                children = {
+                                    UI.Label { text = "渲染模式", fontSize = 11, fontColor = {140,145,160,200}, marginRight = 4 },
+                                    UI.Panel { flexGrow = 1, children = { modePill } },
+                                },
+                            },
+                            UI.Divider { marginTop = 4, marginBottom = 4 },
+                            -- 模式内容
+                            app_modeContainer_,
+                        },
+                    },
                 },
             },
-            UI.Divider { marginTop = 4, marginBottom = 4 },
-            -- 模式内容
-            app_modeContainer_,
         },
     }
 end
@@ -412,19 +427,34 @@ local function CreateAttributesPanel(mod)
 
     return UI.Panel {
         width = "100%", height = "100%",
-        padding = 14, gap = 6,
-        overflow = "scroll",
+        overflow = "hidden",
         children = {
-            SectionLabel("── 基本信息 ──"),
-            PropLabel("名称"), attr_nameField_,
-            SectionLabel("── 战斗属性 ──"),
-            PropLabel("移动速度 (×0.1 m/s)"), attr_speedSlider_,
-            PropLabel("最大血量"), attr_hpSlider_,
-            PropLabel("攻击伤害"), attr_damageSlider_,
-            PropLabel("攻击范围 (×0.1 m)"), attr_rangeSlider_,
-            PropLabel("攻击冷却 (×0.1 s)"), attr_cooldownSlider_,
-            SectionLabel("── 渲染 ──"),
-            PropLabel("角色缩放 (×0.01)"), attr_scaleSlider_,
+            UI.ScrollView {
+                scrollY = true,
+                bounces = false,
+                flexGrow = 1,
+                flexShrink = 1,
+                children = {
+                    UI.Panel {
+                        width = "100%",
+                        flexShrink = 0,
+                        padding = 14,
+                        gap = 6,
+                        children = {
+                            SectionLabel("── 基本信息 ──"),
+                            PropLabel("名称"), attr_nameField_,
+                            SectionLabel("── 战斗属性 ──"),
+                            PropLabel("移动速度 (×0.1 m/s)"), attr_speedSlider_,
+                            PropLabel("最大血量"), attr_hpSlider_,
+                            PropLabel("攻击伤害"), attr_damageSlider_,
+                            PropLabel("攻击范围 (×0.1 m)"), attr_rangeSlider_,
+                            PropLabel("攻击冷却 (×0.1 s)"), attr_cooldownSlider_,
+                            SectionLabel("── 渲染 ──"),
+                            PropLabel("角色缩放 (×0.01)"), attr_scaleSlider_,
+                        },
+                    },
+                },
+            },
         },
     }
 end
