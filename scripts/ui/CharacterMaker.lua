@@ -415,7 +415,7 @@ local function DoSave()
     -- 保存行为树
     if btCanvasApi_ then
         local treeData = btCanvasApi_:GetTreeData()
-        if treeData and treeData.nodes and #treeData.nodes > 0 then
+        if treeData and treeData.nodes and next(treeData.nodes) ~= nil then
             -- 保存到文件
             local jsonStr = cjson.encode(treeData)
             local file = File("bt_" .. editModuleId_ .. ".json", FILE_WRITE)

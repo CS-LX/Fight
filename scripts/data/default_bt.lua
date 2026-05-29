@@ -7,19 +7,19 @@
 return {
     rootId = "node_1",
     nodes = {
-        -- 根节点：抢占优先级
-        node_1 = { id = "node_1", type = "ActivePriority", name = "抢占优先级", x = 400, y = 40 },
-        -- 攻击序列
-        node_2 = { id = "node_2", type = "Sequence", name = "攻击序列", x = 200, y = 150 },
-        node_3 = { id = "node_3", type = "Task", name = "有敌人", x = 100, y = 270, taskName = "HasEnemy" },
-        node_4 = { id = "node_4", type = "Task", name = "在攻击范围", x = 200, y = 270, taskName = "InAttackRange" },
-        node_5 = { id = "node_5", type = "Task", name = "攻击", x = 300, y = 270, taskName = "Attack" },
-        -- 追击序列
-        node_6 = { id = "node_6", type = "Sequence", name = "追击序列", x = 450, y = 150 },
-        node_7 = { id = "node_7", type = "Task", name = "有敌人", x = 400, y = 270, taskName = "HasEnemy" },
-        node_8 = { id = "node_8", type = "Task", name = "追击", x = 520, y = 270, taskName = "Chase" },
-        -- 巡逻
-        node_9 = { id = "node_9", type = "Task", name = "巡逻", x = 650, y = 150, taskName = "Patrol" },
+        -- 根节点：抢占优先级（最左侧）
+        node_1 = { id = "node_1", type = "ActivePriority", name = "抢占优先级", x = 60, y = 200 },
+        -- 攻击序列（中间层，上方）
+        node_2 = { id = "node_2", type = "Sequence", name = "攻击序列", x = 320, y = 60 },
+        node_3 = { id = "node_3", type = "Task", name = "有敌人", x = 580, y = 20, taskName = "HasEnemy" },
+        node_4 = { id = "node_4", type = "Task", name = "在攻击范围", x = 580, y = 80, taskName = "InAttackRange" },
+        node_5 = { id = "node_5", type = "Task", name = "攻击", x = 580, y = 140, taskName = "Attack" },
+        -- 追击序列（中间层，中间）
+        node_6 = { id = "node_6", type = "Sequence", name = "追击序列", x = 320, y = 240 },
+        node_7 = { id = "node_7", type = "Task", name = "有敌人", x = 580, y = 220, taskName = "HasEnemy" },
+        node_8 = { id = "node_8", type = "Task", name = "追击", x = 580, y = 280, taskName = "Chase" },
+        -- 巡逻（中间层，下方）
+        node_9 = { id = "node_9", type = "Task", name = "巡逻", x = 320, y = 400, taskName = "Patrol" },
     },
     edges = {
         -- 根 → 三个子分支（order 决定优先级）
