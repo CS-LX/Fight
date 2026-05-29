@@ -10,6 +10,7 @@ local Config = require("Config")
 local Battle = require("logic.Battle")
 local AIProfiles = require("characters.AIProfiles")
 local BTCompiler = require("logic.BTCompiler")
+local DefaultBTData = require("data.default_bt")
 
 local M = {}
 
@@ -216,42 +217,28 @@ end
 -- 构建行为树（每个角色一棵独立实例）
 -- ============================================================================
 
---- 为角色创建行为树
+--- 为角色创建默认行为树（数据驱动，从 default_bt.lua 编译）
 ---@param char table
 ---@return table BehaviourTree instance
 local function CreateTree(char)
-    --[[
-        ActivePriority (高优先级可抢占低优先级 running 状态)
-        ├── Sequence: 逃跑 [血量低?] → [有敌人?] → [逃跑动作]
-        ├── Sequence: 攻击 [有敌人?] → [在攻击范围?] → [攻击动作]
-        ├── Sequence: 追击 [有敌人?] → [追击动作]
-        └── 巡逻 [随机走动]
-    ]]
-    local tree = BT:new({
-        tree = BT.ActivePriority:new({
-            nodes = {
-                -- 1) 攻击（最高优先级）
-                BT.Sequence:new({
-                    nodes = {
-                        HasEnemy(),
-                        InAttackRange(),
-                        Attack(),
-                    },
-                }),
-                -- 2) 追击
-                BT.Sequence:new({
-                    nodes = {
-                        HasEnemy(),
-                        Chase(),
-                    },
-                }),
-                -- 3) 巡逻（最低优先级）
-                Patrol(),
-            },
-        }),
-        object = { char = char, characters = {}, dt = 0, enemy = nil, enemyDist = 0 },
-    })
+    local tree, err = BTCompiler.Compile(DefaultBTData)
+    if not tree then
+        print("[AI] Failed to compile default tree: " .. tostring(err))
+        -- Fallback：最简单的追击+攻击
+        tree = BT:new({
+            tree = BT.ActivePriority:new({
+                nodes = {
+                    BT.Sequence:new({ nodes = { HasEnemy(), InAttackRange(), Attack() } }),
+                    BT.Sequence:new({ nodes = { HasEnemy(), Chase() } }),
+                    Patrol(),
+                },
+            }),
+            object = { char = char, characters = {}, dt = 0, enemy = nil, enemyDist = 0, profileParams = {} },
+        })
+        return tree
+    end
 
+    tree.object = { char = char, characters = {}, dt = 0, enemy = nil, enemyDist = 0, profileParams = {} }
     return tree
 end
 
@@ -357,6 +344,12 @@ end
 ---@return table|nil
 function M.GetCustomTreeData()
     return customTreeData_
+end
+
+--- 获取默认行为树数据（用于编辑器显示）
+---@return table
+function M.GetDefaultTreeData()
+    return DefaultBTData
 end
 
 --- 检查是否有自定义树

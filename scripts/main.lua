@@ -13,6 +13,7 @@ local AI = require("logic.AI")
 local CharRender = require("render.CharRender")
 local GameUI = require("GameUI")
 local DeploymentEditor = require("ui.DeploymentEditor")
+local CharacterMaker = require("ui.CharacterMaker")
 
 -- ============================================================================
 -- 全局状态
@@ -129,6 +130,9 @@ function EnterDeployment()
         end,
         onClear = function()
             ClearDeployedUnits()
+        end,
+        onOpenMaker = function()
+            OpenCharacterMaker()
         end,
     })
 end
@@ -273,6 +277,53 @@ function ClearDeployedUnits()
     UpdateDeployCounts()
     DeploymentEditor.SetHint("已清空，重新选择角色放置")
     print("[Deploy] Cleared all units")
+end
+
+-- ============================================================================
+-- 角色制作器
+-- ============================================================================
+
+--- 打开角色制作器（从部署界面切换过去）
+function OpenCharacterMaker()
+    -- 关闭部署 UI
+    DeploymentEditor.Close()
+
+    -- 打开制作器
+    CharacterMaker.Open({
+        onClose = function()
+            -- 返回部署阶段（重新打开部署 UI，角色卡列表会刷新）
+            EnterDeployment()
+        end,
+        onTestBattle = function(moduleId)
+            -- 从制作器发起的测试战斗：放置两个该角色对打
+            TestBattleFromMaker(moduleId)
+        end,
+    })
+end
+
+--- 从制作器发起的快速测试战斗
+---@param moduleId string
+function TestBattleFromMaker(moduleId)
+    -- 清除旧数据
+    CharRender.Clear(characters_)
+    AI.Clear()
+    characters_ = {}
+    deployedUnits_ = {}
+
+    -- 放置两个角色对打（红方左侧，蓝方右侧）
+    local redChar = CharLogic.Create(moduleId, "red", Vector3(-3, 0, 0))
+    local blueChar = CharLogic.Create(moduleId, "blue", Vector3(3, 0, 0))
+    table.insert(characters_, redChar)
+    table.insert(characters_, blueChar)
+
+    gameState_ = "playing"
+    -- CreateBattleHUD 内部会调用 CharRender.CreateSpines 重建 Spine 层
+    GameUI.CreateBattleHUD(characters_, function()
+        -- 战斗结束后回到部署
+        ResetGame()
+    end)
+    GameUI.ResetStatus()
+    print("[Main] Test battle from Maker: " .. moduleId)
 end
 
 --- 从部署数据启动战斗

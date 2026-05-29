@@ -318,10 +318,16 @@ local function CreateBehaviourPanel()
     -- 存储 canvas api 供保存/加载使用
     btCanvasApi_ = canvas
 
-    -- 加载已有数据
+    -- 加载已有数据：优先自定义树，否则加载默认树
     local existingData = AI.GetCustomTreeData()
     if existingData then
         canvas:LoadTreeData(existingData)
+    else
+        -- 加载默认行为树到画布（让用户看到当前逻辑并可修改）
+        local defaultData = AI.GetDefaultTreeData()
+        if defaultData then
+            canvas:LoadTreeData(defaultData)
+        end
     end
 
     return UI.Panel {

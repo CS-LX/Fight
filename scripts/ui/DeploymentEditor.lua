@@ -80,6 +80,8 @@ local blueCardRefs_ = {}
 local onStartBattle_ = nil
 ---@type function|nil
 local onClear_ = nil
+---@type function|nil
+local onOpenMaker_ = nil
 
 -- ============================================================================
 -- 公开接口
@@ -249,11 +251,12 @@ local function CreateCardPanel(team)
 end
 
 --- 打开部署编辑器
----@param opts { onStartBattle: function, onClear: function, spineLayer: Widget|nil }
+---@param opts { onStartBattle: function, onClear: function, onOpenMaker: function|nil, spineLayer: Widget|nil }
 function M.Open(opts)
     opts = opts or {}
     onStartBattle_ = opts.onStartBattle
     onClear_ = opts.onClear
+    onOpenMaker_ = opts.onOpenMaker
     local spineLayer = opts.spineLayer
 
     selectedCard_ = nil
@@ -393,6 +396,23 @@ function M.Open(opts)
         end,
     }
 
+    -- 角色制作器入口按钮
+    local makerBtn = UI.Button {
+        text = "MAKER",
+        width = 68,
+        height = 30,
+        fontSize = 11,
+        borderRadius = 15,
+        backgroundColor = { 60, 120, 200, 255 },
+        hoverBackgroundColor = { 80, 145, 230, 255 },
+        pressedBackgroundColor = { 45, 95, 170, 255 },
+        textColor = COLORS.white,
+        marginLeft = 8,
+        onClick = function(self)
+            if onOpenMaker_ then onOpenMaker_() end
+        end,
+    }
+
     local footer = UI.Panel {
         width = "100%",
         height = 52,
@@ -413,6 +433,7 @@ function M.Open(opts)
             hintLabel_,
             startBtn_,
             clearBtn,
+            makerBtn,
         }
     }
 
