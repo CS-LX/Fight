@@ -181,4 +181,28 @@ function M.SaveCustom(mod, isPreset)
     return true, nil
 end
 
+--- 当前使用的角色 ID（外部可设置，默认返回第一个自定义角色或首个预设）
+---@type string|nil
+local currentId_ = nil
+
+--- 设置当前使用的角色 ID
+---@param id string
+function M.SetCurrentId(id)
+    currentId_ = id
+end
+
+--- 获取当前使用的角色 ID
+---@return string|nil
+function M.GetCurrentId()
+    if currentId_ and registry_[currentId_] then
+        return currentId_
+    end
+    -- 优先返回第一个自定义角色
+    local customIds = M.GetCustomIds()
+    if #customIds > 0 then return customIds[1] end
+    -- 否则返回第一个预设
+    if #presetIds_ > 0 then return presetIds_[1] end
+    return nil
+end
+
 return M

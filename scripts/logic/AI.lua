@@ -9,11 +9,20 @@ local BT = require("lib.behaviourtree")
 local Config = require("Config")
 local Battle = require("logic.Battle")
 local AIProfiles = require("characters.AIProfiles")
+local BTCompiler = require("logic.BTCompiler")
 
 local M = {}
 
 -- 每个角色对应一棵行为树实例 (char → tree)
 local trees_ = {}
+
+-- 自定义行为树数据（来自编辑器保存），设置后新生成的角色将使用此树
+---@type table|nil
+local customTreeData_ = nil
+
+-- 已编译的自定义树模板（缓存，避免每次 spawn 都重新编译）
+---@type table|nil
+local compiledCustomTree_ = nil
 
 -- ============================================================================
 -- 辅助函数
@@ -246,6 +255,23 @@ local function CreateTree(char)
     return tree
 end
 
+--- 为角色创建自定义行为树实例（每次调用编译新实例）
+---@param char table
+---@return table|nil BehaviourTree
+local function CreateCustomTree(char)
+    if not customTreeData_ then return nil end
+
+    local tree, err = BTCompiler.Compile(customTreeData_)
+    if not tree then
+        print("[AI] Failed to create custom tree for char: " .. tostring(err))
+        return nil
+    end
+
+    -- 设置初始上下文
+    tree.object = { char = char, characters = {}, dt = 0, enemy = nil, enemyDist = 0, profileParams = {} }
+    return tree
+end
+
 -- ============================================================================
 -- 公开接口
 -- ============================================================================
@@ -260,9 +286,13 @@ function M.Update(char, characters, dt)
     -- 更新攻击冷却
     char.attackCooldown = math.max(0, char.attackCooldown - dt)
 
-    -- 懒创建行为树
+    -- 懒创建行为树（优先使用自定义树）
     if not trees_[char] then
-        trees_[char] = CreateTree(char)
+        if customTreeData_ then
+            trees_[char] = CreateCustomTree(char) or CreateTree(char)
+        else
+            trees_[char] = CreateTree(char)
+        end
     end
 
     -- 获取 AI profile 参数
@@ -285,6 +315,54 @@ end
 --- 清除所有行为树（战斗结束时调用）
 function M.Clear()
     trees_ = {}
+end
+
+-- ============================================================================
+-- 自定义行为树支持
+-- ============================================================================
+
+--- 设置自定义行为树数据（来自编辑器）
+--- 设置后，后续 spawn 的角色将使用此树（需 Clear + 重新生成）
+---@param treeData table|nil 编辑器输出的 { rootId, nodes, edges }，nil 表示恢复默认
+---@return boolean success, string|nil error
+function M.SetCustomTree(treeData)
+    if not treeData then
+        customTreeData_ = nil
+        compiledCustomTree_ = nil
+        print("[AI] Custom tree cleared, using default AI")
+        return true, nil
+    end
+
+    -- 验证
+    local ok, err = BTCompiler.Validate(treeData)
+    if not ok then
+        print("[AI] Custom tree validation failed: " .. tostring(err))
+        return false, err
+    end
+
+    -- 试编译一次确认可用
+    local tree, compileErr = BTCompiler.Compile(treeData)
+    if not tree then
+        print("[AI] Custom tree compile failed: " .. tostring(compileErr))
+        return false, compileErr
+    end
+
+    customTreeData_ = treeData
+    compiledCustomTree_ = nil  -- 清除缓存，每个角色需独立实例
+    print("[AI] Custom tree set successfully")
+    return true, nil
+end
+
+--- 获取当前自定义树数据
+---@return table|nil
+function M.GetCustomTreeData()
+    return customTreeData_
+end
+
+--- 检查是否有自定义树
+---@return boolean
+function M.HasCustomTree()
+    return customTreeData_ ~= nil
 end
 
 --- 兼容：供外部调用寻敌

@@ -21,7 +21,7 @@ local frameCount_ = 0
 
 --- 获取角色的美术配置（从 CharRegistry 模块读取）
 ---@param moduleId string
----@return table 兼容旧 def 格式的 art 数据
+---@return table 兼容旧 def 格式的 art 数据（含外观扩展）
 local function GetArtDef(moduleId)
     local mod = CharRegistry.Get(moduleId)
     if mod then
@@ -30,6 +30,11 @@ local function GetArtDef(moduleId)
             pma = mod.art.pma,
             anims = mod.art.anims,
             renderScale = mod.art.renderScale,
+            tint = mod.art.tint,
+            scaleX = mod.art.scaleX or 1.0,
+            scaleY = mod.art.scaleY or 1.0,
+            animSpeed = mod.art.animSpeed or 1.0,
+            glowColor = mod.art.glowColor,
         }
     end
     -- fallback：返回默认值
@@ -38,6 +43,11 @@ local function GetArtDef(moduleId)
         pma = true,
         anims = { idle = "Default", move = "Move", attack = "Interact", hit = "Interact", die = "Sleep", relax = "Relax" },
         renderScale = 0.30,
+        tint = nil,
+        scaleX = 1.0,
+        scaleY = 1.0,
+        animSpeed = 1.0,
+        glowColor = nil,
     }
 end
 
@@ -45,6 +55,23 @@ end
 local HP_BAR_WIDTH = 40    -- 血条宽度 (base pixels)
 local HP_BAR_HEIGHT = 5    -- 血条高度
 local HP_BAR_OFFSET_Y = -2 -- 血条在角色上方的偏移
+
+--- Spine 容器引用（供增量 AddOne/RemoveOne 使用）
+---@type Widget|nil
+local spineContainer_ = nil
+
+--- 创建空容器（部署阶段初始化，无角色时使用）
+---@return Widget
+function M.CreateEmptyContainer()
+    spineContainer_ = UI.Panel {
+        width = "100%",
+        height = "100%",
+        position = "absolute",
+        top = 0, left = 0,
+        pointerEvents = "none",
+    }
+    return spineContainer_
+end
 
 --- 为角色列表创建 Spine 控件
 ---@param characters table[] 逻辑数据列表
@@ -89,6 +116,16 @@ function M.CreateSpines(characters)
         }
         hpBg:AddChild(hpFill)
 
+        -- 应用初始 animSpeed
+        if def.animSpeed and def.animSpeed ~= 1.0 then
+            spine:SetTimeScale(def.animSpeed)
+        end
+
+        -- 应用初始染色
+        if def.tint then
+            spine:SetColor(def.tint.r, def.tint.g, def.tint.b, 1.0)
+        end
+
         -- 存储渲染数据（与逻辑数据分离）
         renderData_[char] = {
             spine = spine,
@@ -96,6 +133,7 @@ function M.CreateSpines(characters)
             lastFlip = initFlip,
             hpBar = hpBg,
             hpFill = hpFill,
+            tintApplied = def.tint ~= nil,
         }
 
         table.insert(children, spine)
@@ -111,9 +149,76 @@ function M.CreateSpines(characters)
         children = children,
     }
 
+    spineContainer_ = container
     print("[CharRender] CreateSpines: created " .. #children .. " widgets (spine + hp bars)")
 
     return container
+end
+
+--- 增量添加单个角色（部署阶段使用）
+---@param char table 逻辑数据
+function M.AddOne(char)
+    if not spineContainer_ then return end
+    local def = GetArtDef(char.defId)
+    local initFlip = (char.team == "blue")
+
+    local spine = UI.Spine {
+        src = def.spineSrc,
+        animation = def.anims.idle,
+        loop = true,
+        width = 10,
+        height = 10,
+        position = "absolute",
+        left = 0,
+        top = 0,
+        flipX = initFlip,
+        pma = def.pma,
+    }
+
+    local hpBg = UI.Panel {
+        width = HP_BAR_WIDTH,
+        height = HP_BAR_HEIGHT,
+        position = "absolute",
+        left = 0, top = 0,
+        backgroundColor = "#333333",
+        borderRadius = 2,
+    }
+    local hpFill = UI.Panel {
+        width = "100%",
+        height = "100%",
+        backgroundColor = "#44cc44",
+        borderRadius = 2,
+    }
+    hpBg:AddChild(hpFill)
+
+    if def.animSpeed and def.animSpeed ~= 1.0 then
+        spine:SetTimeScale(def.animSpeed)
+    end
+    if def.tint then
+        spine:SetColor(def.tint.r, def.tint.g, def.tint.b, 1.0)
+    end
+
+    renderData_[char] = {
+        spine = spine,
+        currentAnim = def.anims.idle,
+        lastFlip = initFlip,
+        hpBar = hpBg,
+        hpFill = hpFill,
+        tintApplied = def.tint ~= nil,
+    }
+
+    spineContainer_:AddChild(spine)
+    spineContainer_:AddChild(hpBg)
+end
+
+--- 增量删除单个角色（部署阶段使用）
+---@param char table 逻辑数据
+function M.RemoveOne(char)
+    local rd = renderData_[char]
+    if not rd then return end
+    rd.spine:SetVisible(false)
+    if rd.hpBar then rd.hpBar:SetVisible(false) end
+    renderData_[char] = nil
 end
 
 --- 更新动画状态（根据逻辑层的 animState 切换 Spine 动画）
@@ -132,7 +237,7 @@ local function UpdateAnimation(char)
     end
 end
 
---- 更新死亡表现（淡出效果）
+--- 更新死亡表现（淡出效果，保留 tint 染色）
 ---@param char table
 local function UpdateDyingVisual(char)
     local rd = renderData_[char]
@@ -142,7 +247,12 @@ local function UpdateDyingVisual(char)
     if char.state == "dying" then
         local progress = 1.0 - math.max(0, char.deathTimer / Battle.DEATH_DURATION)
         local alpha = 1.0 - progress * 0.8
-        rd.spine:SetColor(1, 1, 1, alpha)
+        -- 保留 tint 染色
+        local def = GetArtDef(char.defId)
+        local tr = (def.tint and def.tint.r) or 1
+        local tg = (def.tint and def.tint.g) or 1
+        local tb = (def.tint and def.tint.b) or 1
+        rd.spine:SetColor(tr, tg, tb, alpha)
     elseif char.state == "dead" then
         rd.spine:SetVisible(false)
     end
@@ -218,8 +328,11 @@ function M.Update(characters, camera)
         -- 翻转：facingRight=true → flipX=false; facingRight=false → flipX=true
         local shouldFlip = not char.facingRight
 
-        -- 直接 scale 系数 = renderScale × perspScale
-        local scaleVal = def.renderScale * perspScale
+        -- 直接 scale 系数 = renderScale × perspScale × 体型缩放
+        local baseScale = def.renderScale * perspScale
+        local scaleValX = baseScale * (def.scaleX or 1.0)
+        local scaleValY = baseScale * (def.scaleY or 1.0)
+        local scaleVal = baseScale  -- 用于通用定位计算
 
         -- 屏幕坐标（归一化 → base pixel）
         local sx = screenPos.x * screenW
@@ -233,6 +346,8 @@ function M.Update(characters, camera)
             sy = sy,
             flip = shouldFlip,
             scaleVal = scaleVal,
+            scaleValX = scaleValX,
+            scaleValY = scaleValY,
         })
 
         ::continue::
@@ -248,7 +363,7 @@ function M.Update(characters, camera)
         local spine = info.rd.spine
         local si = spine.spineInstance_
 
-        -- 定位 widget 并控制 spine scale
+        -- 定位 widget 并控制 spine scale（含体型缩放 scaleX/scaleY）
         if si and si:IsLoaded() then
             local dw = si:GetDataWidth()
             local dh = si:GetDataHeight()
@@ -256,9 +371,9 @@ function M.Update(characters, camera)
 
             if dw > 0 and dh > 0 then
                 -- dataW > 0：Render 内部会用 widget 尺寸计算 scale
-                -- 反推：为了让 Render 计算出我们想要的 scaleVal，需要设 widget 尺寸 = scaleVal * dataW/H
-                local targetW = math.max(1, math.floor(dw * info.scaleVal))
-                local targetH = math.max(1, math.floor(dh * info.scaleVal))
+                -- 反推：为了让 Render 计算出我们想要的 scale，需要设 widget 尺寸 = scaleVal * dataW/H
+                local targetW = math.max(1, math.floor(dw * info.scaleValX))
+                local targetH = math.max(1, math.floor(dh * info.scaleValY))
                 spine:SetWidth(targetW)
                 spine:SetHeight(targetH)
                 spine:SetStyle({
@@ -275,7 +390,7 @@ function M.Update(characters, camera)
                     top = math.floor(info.sy),
                     zIndex = i,
                 })
-                si:SetScale(flipSign * info.scaleVal, -info.scaleVal)
+                si:SetScale(flipSign * info.scaleValX, -info.scaleValY)
             end
         else
             -- spineInstance 未加载，占位
@@ -334,6 +449,7 @@ function M.Clear(characters)
             renderData_[char] = nil
         end
     end
+    spineContainer_ = nil
     debugPrinted_ = false  -- 重置后允许再次打印调试
     frameCount_ = 0
 end

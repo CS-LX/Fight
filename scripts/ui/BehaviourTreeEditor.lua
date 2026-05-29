@@ -8,8 +8,59 @@ local UI = require("urhox-libs/UI")
 local BTCanvas = require("ui.components.BTCanvas")
 local BTNodePalette = require("ui.components.BTNodePalette")
 local BTInspector = require("ui.components.BTInspector")
+local BTCompiler = require("logic.BTCompiler")
 
 local BehaviourTreeEditor = {}
+
+-- 存档文件名
+local SAVE_FILENAME = "bt_custom.json"
+
+-- ============================================================================
+-- 文件持久化
+-- ============================================================================
+
+--- 保存行为树数据到本地文件
+---@param treeData table
+---@return boolean success
+local function SaveToFile(treeData)
+    local jsonStr = cjson.encode(treeData)
+    local file = File(SAVE_FILENAME, FILE_WRITE)
+    if not file:IsOpen() then
+        print("[BTEditor] Failed to open file for writing: " .. SAVE_FILENAME)
+        return false
+    end
+    file:WriteString(jsonStr)
+    file:Close()
+    print("[BTEditor] Saved to " .. SAVE_FILENAME .. " (" .. #jsonStr .. " bytes)")
+    return true
+end
+
+--- 从本地文件加载行为树数据
+---@return table|nil treeData, string|nil error
+local function LoadFromFile()
+    if not fileSystem:FileExists(SAVE_FILENAME) then
+        return nil, "文件不存在"
+    end
+    local file = File(SAVE_FILENAME, FILE_READ)
+    if not file:IsOpen() then
+        return nil, "无法打开文件"
+    end
+    local jsonStr = file:ReadString()
+    file:Close()
+
+    local ok, data = pcall(cjson.decode, jsonStr)
+    if not ok then
+        return nil, "JSON 解析失败"
+    end
+
+    -- 基本结构验证
+    if type(data) ~= "table" or not data.nodes then
+        return nil, "数据格式无效"
+    end
+
+    print("[BTEditor] Loaded from " .. SAVE_FILENAME)
+    return data, nil
+end
 
 --- 打开行为树编辑器
 ---@param props table|nil { onClose: function, initialData: table|nil, onSave: function(data) }
@@ -123,10 +174,55 @@ function BehaviourTreeEditor.Open(props)
                 size = "small",
                 onClick = function()
                     local data = canvas:GetTreeData()
+                    -- 保存到文件
+                    local ok = SaveToFile(data)
+                    -- 回调外部
                     if props.onSave then
                         props.onSave(data)
                     end
-                    UI.Toast { text = "行为树已保存", duration = 2000 }
+                    UI.Toast { text = ok and "已保存到文件" or "保存失败", duration = 2000 }
+                end,
+            },
+            UI.Button {
+                text = "加载",
+                variant = "outlined",
+                size = "small",
+                onClick = function()
+                    local data, err = LoadFromFile()
+                    if data then
+                        canvas:LoadTreeData(data)
+                        inspectorApi.UpdateSelection(nil)
+                        if props.onSave then
+                            props.onSave(data)
+                        end
+                        UI.Toast { text = "已从文件加载", duration = 2000 }
+                    else
+                        UI.Toast { text = "加载失败: " .. (err or "未知错误"), duration = 3000 }
+                    end
+                end,
+            },
+            -- 测试战斗按钮（高亮醒目）
+            UI.Button {
+                text = "测试战斗",
+                variant = "primary",
+                size = "small",
+                backgroundColor = { 220, 80, 60 },
+                onClick = function()
+                    local data = canvas:GetTreeData()
+                    -- 验证树结构
+                    local valid, err = BTCompiler.Validate(data)
+                    if not valid then
+                        UI.Toast { text = "行为树无效: " .. (err or "结构错误"), duration = 3000 }
+                        return
+                    end
+                    -- 保存并触发测试战斗
+                    SaveToFile(data)
+                    if props.onSave then
+                        props.onSave(data)
+                    end
+                    if props.onTestBattle then
+                        props.onTestBattle(data)
+                    end
                 end,
             },
             -- 弹性间隔

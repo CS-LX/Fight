@@ -1,0 +1,700 @@
+-- ============================================================================
+-- ui/CharacterMaker.lua - 角色制作器整合面板（Phase 4）
+-- ============================================================================
+-- 职责：Tab容器+工具栏，整合外观/行为树/属性三个子面板
+-- 布局：
+--   [返回] 角色制作器: [新建] [加载] [保存] [导出] [测试战斗]
+--   [外观]  [行为树]  [属性]  ← 标签切换
+--   (当前标签内容, 占满剩余空间)
+--   [Spine预览]  摘要: HP=100 SPD=2.5 DMG=10 AI=自定义树
+
+local UI = require("urhox-libs/UI")
+local CharModule = require("characters.CharModule")
+local CharRegistry = require("characters.CharRegistry")
+local BTCompiler = require("logic.BTCompiler")
+local AI = require("logic.AI")
+
+local M = {}
+
+-- 状态
+local visible_ = false
+---@type Widget|nil
+local root_ = nil
+local currentTab_ = "appearance"  -- "appearance" | "behaviour" | "attributes"
+
+-- 当前编辑的角色模块 ID
+local editModuleId_ = nil
+
+-- 子面板引用
+---@type Widget|nil
+local contentArea_ = nil
+---@type Widget|nil
+local appearancePanel_ = nil
+---@type Widget|nil
+local behaviourPanel_ = nil
+---@type Widget|nil
+local attributesPanel_ = nil
+
+-- 底部摘要标签
+---@type Widget|nil
+local summaryLabel_ = nil
+---@type Widget|nil
+local previewSpine_ = nil
+
+-- Tab 按钮引用（高亮切换用）
+local tabBtnAppearance_ = nil
+local tabBtnBehaviour_ = nil
+local tabBtnAttributes_ = nil
+
+-- 外部回调
+local onClose_ = nil
+local onTestBattle_ = nil
+
+-- ============================================================================
+-- 子面板数据引用（属性面板控件）
+-- ============================================================================
+local attr_nameField_ = nil
+local attr_speedSlider_ = nil
+local attr_hpSlider_ = nil
+local attr_damageSlider_ = nil
+local attr_rangeSlider_ = nil
+local attr_cooldownSlider_ = nil
+local attr_scaleSlider_ = nil
+
+-- 外观面板控件
+local app_sliderR_ = nil
+local app_sliderG_ = nil
+local app_sliderB_ = nil
+local app_sliderScaleX_ = nil
+local app_sliderScaleY_ = nil
+local app_sliderAnimSpeed_ = nil
+local app_glowToggle_ = nil
+local app_sliderGlowR_ = nil
+local app_sliderGlowG_ = nil
+local app_sliderGlowB_ = nil
+
+-- 行为树画布引用
+local btCanvasApi_ = nil
+
+-- ============================================================================
+-- 辅助
+-- ============================================================================
+
+local function SectionLabel(text)
+    return UI.Label {
+        text = text,
+        fontSize = 13,
+        fontColor = { 150, 200, 255, 255 },
+        marginTop = 10,
+    }
+end
+
+local function PropLabel(text)
+    return UI.Label {
+        text = text,
+        fontSize = 11,
+        fontColor = { 180, 180, 180, 255 },
+        marginTop = 2,
+    }
+end
+
+--- 更新摘要栏
+local function UpdateSummary()
+    if not summaryLabel_ then return end
+    local mod = CharRegistry.Get(editModuleId_)
+    if not mod then
+        summaryLabel_:SetText("无角色数据")
+        return
+    end
+    local c = mod.config
+    local aiStr = mod.ai and mod.ai.profile or "default"
+    if AI.GetCustomTreeData() then aiStr = "自定义树" end
+    summaryLabel_:SetText(string.format(
+        "HP=%d  SPD=%.1f  DMG=%d  RNG=%.1f  AI=%s",
+        c.baseHP, c.baseSpeed, c.attackDamage, c.attackRange, aiStr
+    ))
+end
+
+--- 从属性面板读取 config
+local function ReadConfigFromUI()
+    if not attr_speedSlider_ then return nil end
+    return {
+        baseSpeed = attr_speedSlider_:GetValue() * 0.1,
+        baseHP = attr_hpSlider_:GetValue(),
+        attackDamage = attr_damageSlider_:GetValue(),
+        attackRange = attr_rangeSlider_:GetValue() * 0.1,
+        attackCooldown = attr_cooldownSlider_:GetValue() * 0.1,
+    }
+end
+
+--- 从外观面板读取 art 扩展数据
+local function ReadArtExtFromUI()
+    if not app_sliderR_ then return {} end
+    return {
+        tint = {
+            r = app_sliderR_:GetValue() / 100,
+            g = app_sliderG_:GetValue() / 100,
+            b = app_sliderB_:GetValue() / 100,
+        },
+        scaleX = app_sliderScaleX_:GetValue() / 100,
+        scaleY = app_sliderScaleY_:GetValue() / 100,
+        animSpeed = app_sliderAnimSpeed_:GetValue() / 100,
+        glowColor = (app_glowToggle_ and app_glowToggle_.checked) and {
+            r = app_sliderGlowR_:GetValue() / 100,
+            g = app_sliderGlowG_:GetValue() / 100,
+            b = app_sliderGlowB_:GetValue() / 100,
+        } or nil,
+    }
+end
+
+--- 更新预览 Spine 颜色/速率
+local function UpdatePreviewSpine()
+    if not previewSpine_ or not app_sliderR_ then return end
+    local r = app_sliderR_:GetValue() / 100
+    local g = app_sliderG_:GetValue() / 100
+    local b = app_sliderB_:GetValue() / 100
+    previewSpine_:SetColor(r, g, b, 1.0)
+    local speed = app_sliderAnimSpeed_:GetValue() / 100
+    previewSpine_:SetTimeScale(speed)
+end
+
+-- ============================================================================
+-- 子面板创建
+-- ============================================================================
+
+--- 创建外观面板 Widget
+local function CreateAppearancePanel(art)
+    local initR = math.floor((art.tint and art.tint.r or 1.0) * 100)
+    local initG = math.floor((art.tint and art.tint.g or 1.0) * 100)
+    local initB = math.floor((art.tint and art.tint.b or 1.0) * 100)
+    local initSX = math.floor((art.scaleX or 1.0) * 100)
+    local initSY = math.floor((art.scaleY or 1.0) * 100)
+    local initAnimSpeed = math.floor((art.animSpeed or 1.0) * 100)
+    local hasGlow = art.glowColor ~= nil
+    local initGR = hasGlow and math.floor(art.glowColor.r * 100) or 100
+    local initGG = hasGlow and math.floor(art.glowColor.g * 100) or 80
+    local initGB = hasGlow and math.floor(art.glowColor.b * 100) or 20
+
+    local onColorChange = function() UpdatePreviewSpine() end
+
+    app_sliderR_ = UI.Slider { value = initR, min = 0, max = 100, step = 1, width = "100%", onChange = onColorChange }
+    app_sliderG_ = UI.Slider { value = initG, min = 0, max = 100, step = 1, width = "100%", onChange = onColorChange }
+    app_sliderB_ = UI.Slider { value = initB, min = 0, max = 100, step = 1, width = "100%", onChange = onColorChange }
+    app_sliderScaleX_ = UI.Slider { value = initSX, min = 50, max = 200, step = 5, width = "100%" }
+    app_sliderScaleY_ = UI.Slider { value = initSY, min = 50, max = 200, step = 5, width = "100%" }
+    app_sliderAnimSpeed_ = UI.Slider {
+        value = initAnimSpeed, min = 20, max = 300, step = 5, width = "100%",
+        onChange = function() UpdatePreviewSpine() end,
+    }
+
+    app_glowToggle_ = { checked = hasGlow }
+    local glowBtn = UI.Button {
+        text = hasGlow and "ON" or "OFF",
+        width = 60, height = 28,
+        variant = hasGlow and "primary" or "default",
+        onClick = function(self)
+            app_glowToggle_.checked = not app_glowToggle_.checked
+            self:SetText(app_glowToggle_.checked and "ON" or "OFF")
+        end,
+    }
+
+    app_sliderGlowR_ = UI.Slider { value = initGR, min = 0, max = 100, step = 5, width = "100%" }
+    app_sliderGlowG_ = UI.Slider { value = initGG, min = 0, max = 100, step = 5, width = "100%" }
+    app_sliderGlowB_ = UI.Slider { value = initGB, min = 0, max = 100, step = 5, width = "100%" }
+
+    return UI.Panel {
+        width = "100%", height = "100%",
+        padding = 14, gap = 4,
+        overflow = "scroll",
+        children = {
+            SectionLabel("── 角色染色 ──"),
+            PropLabel("红 (R)"), app_sliderR_,
+            PropLabel("绿 (G)"), app_sliderG_,
+            PropLabel("蓝 (B)"), app_sliderB_,
+            SectionLabel("── 体型缩放 ──"),
+            PropLabel("水平缩放 (50%~200%)"), app_sliderScaleX_,
+            PropLabel("垂直缩放 (50%~200%)"), app_sliderScaleY_,
+            SectionLabel("── 动画速率 ──"),
+            PropLabel("播放速度 (20%~300%)"), app_sliderAnimSpeed_,
+            SectionLabel("── 特效光环 ──"),
+            UI.Panel {
+                flexDirection = "row", alignItems = "center", gap = 8,
+                children = { PropLabel("启用光环"), glowBtn },
+            },
+            PropLabel("光环 R"), app_sliderGlowR_,
+            PropLabel("光环 G"), app_sliderGlowG_,
+            PropLabel("光环 B"), app_sliderGlowB_,
+        },
+    }
+end
+
+--- 创建属性面板 Widget
+local function CreateAttributesPanel(mod)
+    local c = mod.config
+    attr_nameField_ = UI.TextField {
+        value = mod.name,
+        placeholder = "角色名称",
+        width = "100%", fontSize = 14,
+    }
+    attr_speedSlider_ = UI.Slider { value = math.floor(c.baseSpeed * 10 + 0.5), min = 10, max = 50, step = 1, width = "100%" }
+    attr_hpSlider_ = UI.Slider { value = c.baseHP, min = 50, max = 300, step = 10, width = "100%" }
+    attr_damageSlider_ = UI.Slider { value = c.attackDamage, min = 5, max = 50, step = 1, width = "100%" }
+    attr_rangeSlider_ = UI.Slider { value = math.floor(c.attackRange * 10 + 0.5), min = 8, max = 25, step = 1, width = "100%" }
+    attr_cooldownSlider_ = UI.Slider { value = math.floor(c.attackCooldown * 10 + 0.5), min = 3, max = 20, step = 1, width = "100%" }
+    attr_scaleSlider_ = UI.Slider { value = math.floor(mod.art.renderScale * 100 + 0.5), min = 10, max = 60, step = 1, width = "100%" }
+
+    return UI.Panel {
+        width = "100%", height = "100%",
+        padding = 14, gap = 6,
+        overflow = "scroll",
+        children = {
+            SectionLabel("── 基本信息 ──"),
+            PropLabel("名称"), attr_nameField_,
+            SectionLabel("── 战斗属性 ──"),
+            PropLabel("移动速度 (×0.1 m/s)"), attr_speedSlider_,
+            PropLabel("最大血量"), attr_hpSlider_,
+            PropLabel("攻击伤害"), attr_damageSlider_,
+            PropLabel("攻击范围 (×0.1 m)"), attr_rangeSlider_,
+            PropLabel("攻击冷却 (×0.1 s)"), attr_cooldownSlider_,
+            SectionLabel("── 渲染 ──"),
+            PropLabel("角色缩放 (×0.01)"), attr_scaleSlider_,
+        },
+    }
+end
+
+--- 创建行为树面板 Widget（嵌入式）
+local function CreateBehaviourPanel()
+    local BTCanvas = require("ui.components.BTCanvas")
+    local BTNodePalette = require("ui.components.BTNodePalette")
+    local BTInspector = require("ui.components.BTInspector")
+
+    local inspectorApi = nil
+    local canvas = nil
+
+    canvas = BTCanvas {
+        flexGrow = 1,
+        height = "100%",
+        onSelectionChanged = function(node)
+            if inspectorApi then inspectorApi.UpdateSelection(node) end
+        end,
+    }
+
+    local palette = BTNodePalette.Create({
+        width = 150,
+        onAddNode = function(nodeType, taskName)
+            local layout = canvas:GetAbsoluteLayout()
+            local cx, cy = 0, 0
+            if layout then
+                cx, cy = canvas:ScreenToCanvas(
+                    layout.x + layout.w * 0.5,
+                    layout.y + layout.h * 0.5
+                )
+            end
+            cx = cx + (math.random() - 0.5) * 80
+            cy = cy + (math.random() - 0.5) * 60
+            local name = nil
+            if taskName then
+                local info = require("logic.BTTaskLibrary").registry[taskName]
+                if info then name = info.label end
+            end
+            canvas:AddNode(nodeType, cx, cy, name, taskName)
+        end,
+    })
+
+    local inspectorPanel
+    inspectorPanel, inspectorApi = BTInspector.Create({
+        width = 170,
+        onDelete = function(nodeId)
+            canvas:RemoveNode(nodeId)
+            inspectorApi.UpdateSelection(nil)
+        end,
+        onSetRoot = function(nodeId) canvas:SetAsRoot(nodeId) end,
+        onRename = function(nodeId, newName)
+            local node = canvas.nodes_[nodeId]
+            if node then node.name = newName end
+        end,
+    })
+
+    -- 存储 canvas api 供保存/加载使用
+    btCanvasApi_ = canvas
+
+    -- 加载已有数据
+    local existingData = AI.GetCustomTreeData()
+    if existingData then
+        canvas:LoadTreeData(existingData)
+    end
+
+    return UI.Panel {
+        width = "100%", height = "100%",
+        flexDirection = "row",
+        children = {
+            palette,
+            canvas,
+            inspectorPanel,
+        },
+    }
+end
+
+-- ============================================================================
+-- Tab 切换逻辑
+-- ============================================================================
+
+local function HighlightTab(tab)
+    local activeColor = { 80, 140, 255, 255 }
+    local inactiveColor = { 60, 60, 70, 255 }
+    if tabBtnAppearance_ then
+        tabBtnAppearance_:SetBackgroundColor(tab == "appearance" and activeColor or inactiveColor)
+    end
+    if tabBtnBehaviour_ then
+        tabBtnBehaviour_:SetBackgroundColor(tab == "behaviour" and activeColor or inactiveColor)
+    end
+    if tabBtnAttributes_ then
+        tabBtnAttributes_:SetBackgroundColor(tab == "attributes" and activeColor or inactiveColor)
+    end
+end
+
+local function SwitchTab(tab)
+    if currentTab_ == tab then return end
+    currentTab_ = tab
+    HighlightTab(tab)
+
+    if appearancePanel_ then appearancePanel_:Hide() end
+    if behaviourPanel_ then behaviourPanel_:Hide() end
+    if attributesPanel_ then attributesPanel_:Hide() end
+
+    if tab == "appearance" and appearancePanel_ then
+        appearancePanel_:Show()
+    elseif tab == "behaviour" and behaviourPanel_ then
+        behaviourPanel_:Show()
+    elseif tab == "attributes" and attributesPanel_ then
+        attributesPanel_:Show()
+    end
+end
+
+-- ============================================================================
+-- 工具栏动作
+-- ============================================================================
+
+--- 保存角色（整合所有子面板数据）
+local function DoSave()
+    local mod = CharRegistry.Get(editModuleId_)
+    if not mod then
+        print("[CharacterMaker] No module to save: " .. tostring(editModuleId_))
+        return false
+    end
+
+    -- 读取属性面板
+    local cfg = ReadConfigFromUI()
+    if cfg then
+        mod.config = cfg
+    end
+    if attr_nameField_ then
+        mod.name = attr_nameField_:GetValue()
+        if mod.name == "" then mod.name = "Custom Hero" end
+    end
+    if attr_scaleSlider_ then
+        mod.art.renderScale = attr_scaleSlider_:GetValue() * 0.01
+    end
+
+    -- 读取外观面板
+    local artExt = ReadArtExtFromUI()
+    if artExt.tint then
+        mod.art.tint = artExt.tint
+        mod.art.scaleX = artExt.scaleX
+        mod.art.scaleY = artExt.scaleY
+        mod.art.animSpeed = artExt.animSpeed
+        mod.art.glowColor = artExt.glowColor
+    end
+
+    -- 保存行为树
+    if btCanvasApi_ then
+        local treeData = btCanvasApi_:GetTreeData()
+        if treeData and treeData.nodes and #treeData.nodes > 0 then
+            -- 保存到文件
+            local jsonStr = cjson.encode(treeData)
+            local file = File("bt_" .. editModuleId_ .. ".json", FILE_WRITE)
+            if file:IsOpen() then
+                file:WriteString(jsonStr)
+                file:Close()
+            end
+            -- 编译并设到 AI
+            AI.SetCustomTree(treeData)
+        end
+    end
+
+    -- 写入注册表
+    local ok, err = CharRegistry.SaveCustom(mod)
+    if ok then
+        print("[CharacterMaker] Saved: " .. mod.id .. " (" .. mod.name .. ")")
+        UI.Toast { text = "角色已保存", duration = 2000 }
+        UpdateSummary()
+        return true
+    else
+        print("[CharacterMaker] Save failed: " .. tostring(err))
+        UI.Toast { text = "保存失败: " .. tostring(err), duration = 3000 }
+        return false
+    end
+end
+
+--- 导出 JSON 到控制台
+local function DoExport()
+    local mod = CharRegistry.Get(editModuleId_)
+    if not mod then return end
+    local data = CharModule.Serialize(mod)
+    local json = cjson.encode(data)
+    print("=== CHARACTER EXPORT ===")
+    print(json)
+    print("=== END EXPORT ===")
+    UI.Toast { text = "已导出到控制台", duration = 2000 }
+end
+
+--- 新建角色
+local function DoNew()
+    local newId = "custom_" .. os.time()
+    local newMod = CharModule.CreateDefault(newId, "New Hero")
+    CharRegistry.SaveCustom(newMod)
+    CharRegistry.SetCurrentId(newId)
+    -- 重新打开制作器
+    M.Close()
+    M.Open({ moduleId = newId, onClose = onClose_, onTestBattle = onTestBattle_ })
+end
+
+--- 加载现有角色（切换到下一个自定义角色）
+local function DoLoad()
+    local allIds = CharRegistry.GetAllIds()
+    if #allIds == 0 then
+        UI.Toast { text = "无可加载角色", duration = 2000 }
+        return
+    end
+    -- 找到当前角色在列表中的位置，切换到下一个
+    local nextId = allIds[1]
+    for i, id in ipairs(allIds) do
+        if id == editModuleId_ and i < #allIds then
+            nextId = allIds[i + 1]
+            break
+        end
+    end
+    if nextId == editModuleId_ then
+        UI.Toast { text = "只有一个角色", duration = 2000 }
+        return
+    end
+    CharRegistry.SetCurrentId(nextId)
+    M.Close()
+    M.Open({ moduleId = nextId, onClose = onClose_, onTestBattle = onTestBattle_ })
+end
+
+--- 测试战斗
+local function DoTestBattle()
+    -- 先保存
+    if not DoSave() then return end
+    -- 关闭制作器并触发战斗
+    M.Close()
+    if onTestBattle_ then
+        onTestBattle_(editModuleId_)
+    end
+end
+
+-- ============================================================================
+-- 公开接口
+-- ============================================================================
+
+--- 打开角色制作器
+---@param opts { moduleId: string|nil, onClose: function|nil, onTestBattle: function|nil }
+function M.Open(opts)
+    opts = opts or {}
+    if visible_ then M.Close() end
+
+    editModuleId_ = opts.moduleId or CharRegistry.GetCurrentId() or "wisdel"
+    onClose_ = opts.onClose
+    onTestBattle_ = opts.onTestBattle
+
+    CharRegistry.SetCurrentId(editModuleId_)
+
+    local mod = CharRegistry.Get(editModuleId_)
+    if not mod then
+        mod = CharModule.CreateDefault(editModuleId_, "Unknown")
+        CharRegistry.SaveCustom(mod)
+    end
+
+    -- 创建子面板
+    appearancePanel_ = CreateAppearancePanel(mod.art)
+    behaviourPanel_ = CreateBehaviourPanel()
+    attributesPanel_ = CreateAttributesPanel(mod)
+
+    -- 初始隐藏非激活面板
+    behaviourPanel_:Hide()
+    attributesPanel_:Hide()
+
+    -- Tab 按钮
+    local activeColor = { 80, 140, 255, 255 }
+    local inactiveColor = { 60, 60, 70, 255 }
+
+    tabBtnAppearance_ = UI.Button {
+        text = "外观", width = 80, height = 32,
+        backgroundColor = activeColor,
+        onClick = function() SwitchTab("appearance") end,
+    }
+    tabBtnBehaviour_ = UI.Button {
+        text = "行为树", width = 80, height = 32,
+        backgroundColor = inactiveColor,
+        onClick = function() SwitchTab("behaviour") end,
+    }
+    tabBtnAttributes_ = UI.Button {
+        text = "属性", width = 80, height = 32,
+        backgroundColor = inactiveColor,
+        onClick = function() SwitchTab("attributes") end,
+    }
+
+    -- 底部 Spine 预览
+    previewSpine_ = UI.Spine {
+        src = mod.art.spineSrc,
+        animation = mod.art.anims.idle,
+        loop = true,
+        width = 80, height = 100,
+        pma = mod.art.pma,
+    }
+
+    -- 底部摘要
+    summaryLabel_ = UI.Label {
+        text = "",
+        fontSize = 12,
+        fontColor = { 200, 200, 200, 255 },
+        flexGrow = 1,
+        marginLeft = 10,
+    }
+    UpdateSummary()
+
+    -- 初始预览颜色
+    if mod.art.tint then
+        previewSpine_:SetColor(mod.art.tint.r, mod.art.tint.g, mod.art.tint.b, 1.0)
+    end
+    if mod.art.animSpeed then
+        previewSpine_:SetTimeScale(mod.art.animSpeed)
+    end
+
+    -- 组装主布局
+    root_ = UI.Panel {
+        width = "100%", height = "100%",
+        flexDirection = "column",
+        backgroundColor = { 18, 18, 28, 250 },
+        children = {
+            -- 顶部工具栏
+            UI.Panel {
+                width = "100%", height = 42,
+                flexDirection = "row",
+                alignItems = "center",
+                backgroundColor = { 28, 28, 36, 255 },
+                paddingLeft = 10, paddingRight = 10,
+                gap = 8,
+                children = {
+                    UI.Button {
+                        text = "← 返回", size = "small", variant = "text",
+                        onClick = function() M.Close() end,
+                    },
+                    UI.Label {
+                        text = "角色制作器",
+                        fontSize = 15, fontWeight = "bold",
+                        fontColor = { 255, 220, 100, 255 },
+                        marginRight = 12,
+                    },
+                    UI.Button { text = "新建", size = "small", variant = "outlined", onClick = function() DoNew() end },
+                    UI.Button { text = "加载", size = "small", variant = "outlined", onClick = function() DoLoad() end },
+                    UI.Button { text = "保存", size = "small", variant = "primary", onClick = function() DoSave() end },
+                    UI.Button { text = "导出", size = "small", variant = "outlined", onClick = function() DoExport() end },
+                    UI.Panel { flexGrow = 1 },
+                    UI.Button {
+                        text = "测试战斗", size = "small",
+                        variant = "primary",
+                        backgroundColor = { 220, 80, 60 },
+                        onClick = function() DoTestBattle() end,
+                    },
+                },
+            },
+            -- Tab 栏
+            UI.Panel {
+                width = "100%", height = 38,
+                flexDirection = "row",
+                alignItems = "center",
+                backgroundColor = { 35, 35, 45, 255 },
+                paddingLeft = 10,
+                gap = 6,
+                children = {
+                    tabBtnAppearance_,
+                    tabBtnBehaviour_,
+                    tabBtnAttributes_,
+                },
+            },
+            -- 内容区
+            UI.Panel {
+                width = "100%", flexGrow = 1,
+                overflow = "hidden",
+                children = {
+                    appearancePanel_,
+                    behaviourPanel_,
+                    attributesPanel_,
+                },
+            },
+            -- 底部状态栏
+            UI.Panel {
+                width = "100%", height = 56,
+                flexDirection = "row",
+                alignItems = "center",
+                backgroundColor = { 25, 25, 35, 255 },
+                paddingLeft = 10, paddingRight = 10,
+                children = {
+                    previewSpine_,
+                    summaryLabel_,
+                },
+            },
+        },
+    }
+
+    UI.SetRoot(root_)
+    visible_ = true
+    currentTab_ = "appearance"
+
+    print("[CharacterMaker] Opened for: " .. editModuleId_ .. " (" .. mod.name .. ")")
+end
+
+--- 关闭制作器
+function M.Close()
+    if not visible_ then return end
+    visible_ = false
+    root_ = nil
+    appearancePanel_ = nil
+    behaviourPanel_ = nil
+    attributesPanel_ = nil
+    contentArea_ = nil
+    previewSpine_ = nil
+    summaryLabel_ = nil
+    btCanvasApi_ = nil
+    -- 清空控件引用
+    attr_nameField_ = nil
+    attr_speedSlider_ = nil
+    attr_hpSlider_ = nil
+    attr_damageSlider_ = nil
+    attr_rangeSlider_ = nil
+    attr_cooldownSlider_ = nil
+    attr_scaleSlider_ = nil
+    app_sliderR_ = nil
+    app_sliderG_ = nil
+    app_sliderB_ = nil
+    app_sliderScaleX_ = nil
+    app_sliderScaleY_ = nil
+    app_sliderAnimSpeed_ = nil
+    app_glowToggle_ = nil
+    app_sliderGlowR_ = nil
+    app_sliderGlowG_ = nil
+    app_sliderGlowB_ = nil
+
+    if onClose_ then onClose_() end
+    print("[CharacterMaker] Closed")
+end
+
+--- 是否可见
+---@return boolean
+function M.IsVisible()
+    return visible_
+end
+
+return M

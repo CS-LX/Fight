@@ -25,6 +25,11 @@
 ---@field pma boolean 预乘 Alpha
 ---@field anims table<string, string> 状态→动画名映射
 ---@field renderScale number 渲染缩放系数
+---@field tint {r:number, g:number, b:number}|nil RGB 染色 (0~1)
+---@field scaleX number|nil 水平体型缩放 (默认1.0)
+---@field scaleY number|nil 垂直体型缩放 (默认1.0)
+---@field animSpeed number|nil 动画播放速率 (默认1.0)
+---@field glowColor {r:number, g:number, b:number}|nil 光环颜色 (nil=无光环)
 
 ---@class CharModuleAI
 ---@field profile string AI 行为模板 ("aggressive"|"balanced"|"defensive")
@@ -58,6 +63,11 @@ function M.CreateDefault(id, name)
                 relax = "Relax",
             },
             renderScale = 0.30,
+            tint = { r = 1.0, g = 1.0, b = 1.0 },
+            scaleX = 1.0,
+            scaleY = 1.0,
+            animSpeed = 1.0,
+            glowColor = nil,
         },
         ai = {
             profile = "aggressive",
@@ -98,6 +108,11 @@ function M.Serialize(mod)
             pma = mod.art.pma,
             anims = mod.art.anims,
             renderScale = mod.art.renderScale,
+            tint = mod.art.tint,
+            scaleX = mod.art.scaleX,
+            scaleY = mod.art.scaleY,
+            animSpeed = mod.art.animSpeed,
+            glowColor = mod.art.glowColor,
         },
         ai = {
             profile = mod.ai.profile,
@@ -122,6 +137,11 @@ function M.Deserialize(data)
         if data.art.pma ~= nil then default.art.pma = data.art.pma end
         if data.art.anims then default.art.anims = data.art.anims end
         if data.art.renderScale then default.art.renderScale = data.art.renderScale end
+        if data.art.tint then default.art.tint = data.art.tint end
+        if data.art.scaleX then default.art.scaleX = data.art.scaleX end
+        if data.art.scaleY then default.art.scaleY = data.art.scaleY end
+        if data.art.animSpeed then default.art.animSpeed = data.art.animSpeed end
+        if data.art.glowColor then default.art.glowColor = data.art.glowColor end
     end
     -- 合并 ai
     if data.ai then

@@ -85,4 +85,19 @@ function M.SpawnTeams(moduleId)
     return characters
 end
 
+--- 从部署数据生成角色列表（TABS 部署模式）
+---@param placements table[] { moduleId, team, worldX, worldZ, col, row }
+---@return table[] 角色逻辑数据列表
+function M.SpawnFromDeployment(placements)
+    local characters = {}
+
+    for _, p in ipairs(placements) do
+        local spawnPos = Vector3(p.worldX, 0, p.worldZ)
+        local char = M.Create(p.moduleId, p.team, spawnPos)
+        table.insert(characters, char)
+    end
+
+    return characters
+end
+
 return M
