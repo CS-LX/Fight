@@ -41,6 +41,9 @@ local deployedUnits_ = {}
 --- 部署删除距离阈值（米）
 local DEPLOY_REMOVE_DIST = 1.5
 
+--- 角色碰撞半径（米），用于行动时互相排斥
+local CHAR_COLLISION_RADIUS = 0.6
+
 -- ============================================================================
 -- 生命周期
 -- ============================================================================
@@ -317,6 +320,39 @@ function UpdateGameLogic(dt)
                 redAlive = redAlive + 1
             else
                 blueAlive = blueAlive + 1
+            end
+        end
+    end
+
+    -- 碰撞分离：防止角色重叠（简单圆形排斥）
+    local minDist = CHAR_COLLISION_RADIUS * 2
+    for i = 1, #characters_ do
+        local a = characters_[i]
+        if a.state ~= "dead" and a.state ~= "dying" then
+            for j = i + 1, #characters_ do
+                local b = characters_[j]
+                if b.state ~= "dead" and b.state ~= "dying" then
+                    local dx = b.worldPos.x - a.worldPos.x
+                    local dz = b.worldPos.z - a.worldPos.z
+                    local dist = math.sqrt(dx * dx + dz * dz)
+                    if dist < minDist and dist > 0.001 then
+                        -- 计算分离量（各推一半）
+                        local overlap = (minDist - dist) * 0.5
+                        local invDist = 1.0 / dist
+                        local nx = dx * invDist
+                        local nz = dz * invDist
+                        a.worldPos = Vector3(
+                            a.worldPos.x - nx * overlap,
+                            a.worldPos.y,
+                            a.worldPos.z - nz * overlap
+                        )
+                        b.worldPos = Vector3(
+                            b.worldPos.x + nx * overlap,
+                            b.worldPos.y,
+                            b.worldPos.z + nz * overlap
+                        )
+                    end
+                end
             end
         end
     end

@@ -17,25 +17,25 @@ local M = {}
 
 -- 颜色体系
 local COLORS = {
-    -- 面板背景
-    panelBg         = { 12, 12, 24, 235 },
-    panelBorder     = { 60, 50, 90, 200 },
+    -- 面板背景（实底带微透）
+    panelBg         = { 30, 28, 45, 245 },
+    panelBorder     = { 80, 65, 110, 255 },
     -- 卡片
-    cardRedBg       = { 70, 20, 20, 200 },
+    cardRedBg       = { 90, 30, 30, 240 },
     cardRedSelected = { 200, 50, 50, 255 },
-    cardRedBorder   = { 120, 40, 40, 200 },
-    cardBlueBg      = { 20, 25, 70, 200 },
+    cardRedBorder   = { 150, 55, 55, 255 },
+    cardBlueBg      = { 30, 38, 90, 240 },
     cardBlueSelected= { 50, 80, 220, 255 },
-    cardBlueBorder  = { 40, 50, 120, 200 },
-    -- 顶栏/底栏
-    headerBg        = { 20, 15, 35, 240 },
-    footerBg        = { 15, 12, 28, 240 },
+    cardBlueBorder  = { 55, 65, 150, 255 },
+    -- 顶栏/底栏（实底）
+    headerBg        = { 25, 20, 40, 250 },
+    footerBg        = { 22, 18, 38, 250 },
     -- 文字
     gold            = { 255, 215, 60, 255 },
-    silver          = { 200, 200, 210, 255 },
+    silver          = { 220, 220, 230, 255 },
     redText         = { 255, 100, 100, 255 },
     blueText        = { 100, 160, 255, 255 },
-    hintText        = { 180, 180, 160, 180 },
+    hintText        = { 200, 200, 180, 220 },
     white           = { 255, 255, 255, 255 },
     -- 按钮
     btnPrimary      = { 220, 170, 30, 255 },
@@ -136,7 +136,7 @@ local function CreateCardPanel(team)
             height = 48,
             overflow = "hidden",
             borderRadius = 24,
-            bgColor = { 0, 0, 0, 60 },
+            bgColor = { 20, 18, 30, 220 },
             alignItems = "center",
             justifyContent = "center",
             children = {
