@@ -128,30 +128,26 @@ local function CreateCardPanel(team)
     for _, id in ipairs(allIds) do
         local mod = CharRegistry.Get(id)
         local name = mod and mod.name or id
-        local spineSrc = mod and mod.art and mod.art.spineSrc or nil
-        local pma = mod and mod.art and mod.art.pma or true
-        local idleAnim = mod and mod.art and mod.art.anims and mod.art.anims.idle or "Default"
+        local avatarImg = mod and mod.art and mod.art.avatar or "image/edited_wisdel_avatar_20260529105147.png"
 
-        -- Spine 缩略图容器（裁剪溢出）
+        -- 头像缩略图容器
         local thumbContainer = UI.Panel {
             width = 48,
             height = 48,
             overflow = "hidden",
-            borderRadius = 6,
-            bgColor = { 0, 0, 0, 80 },
+            borderRadius = 24,
+            bgColor = { 0, 0, 0, 60 },
             alignItems = "center",
             justifyContent = "center",
-            children = spineSrc and {
-                UI.Spine {
-                    src = spineSrc,
-                    animation = idleAnim,
-                    loop = true,
-                    width = 44,
-                    height = 44,
-                    objectFit = "contain",
-                    pma = pma,
+            children = {
+                UI.Panel {
+                    width = 42,
+                    height = 42,
+                    borderRadius = 21,
+                    backgroundImage = avatarImg,
+                    backgroundFit = "cover",
                 },
-            } or {},
+            },
         }
 
         -- 角色名标签

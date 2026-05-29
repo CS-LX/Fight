@@ -33,6 +33,7 @@ local function CreateWisdelPreset()
             attackCooldown = 0.8,
         },
         art = {
+            avatar = "image/edited_wisdel_avatar_20260529105147.png",
             spineSrc = "spine/build_char_1035_wisdel_game_9/build_char_1035_wisdel_game_9.skel",
             pma = true,
             anims = {
