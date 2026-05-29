@@ -129,8 +129,9 @@ end
 
 --- 重置游戏
 function ResetGame()
-    -- 清除旧渲染数据
+    -- 清除旧数据
     CharRender.Clear(characters_)
+    AI.Clear()
     characters_ = {}
 
     -- 重新生成逻辑数据

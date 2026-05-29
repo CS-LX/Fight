@@ -31,6 +31,11 @@ local function GetDef(defId)
     return defCache_[defId]
 end
 
+-- 血条配置
+local HP_BAR_WIDTH = 40    -- 血条宽度 (base pixels)
+local HP_BAR_HEIGHT = 5    -- 血条高度
+local HP_BAR_OFFSET_Y = 8  -- 血条在角色上方的偏移
+
 --- 为角色列表创建 Spine 控件
 ---@param characters table[] 逻辑数据列表
 ---@return Widget spineContainer
@@ -55,16 +60,36 @@ function M.CreateSpines(characters)
             pma = def.pma,
         }
 
-        -- 无队伍着色，保持原始颜色
+        -- 血条背景（深灰底）
+        local hpBg = UI.Panel {
+            width = HP_BAR_WIDTH,
+            height = HP_BAR_HEIGHT,
+            position = "absolute",
+            left = 0, top = 0,
+            backgroundColor = "#333333",
+            borderRadius = 2,
+        }
+
+        -- 血条前景（绿色填充）
+        local hpFill = UI.Panel {
+            width = "100%",
+            height = "100%",
+            backgroundColor = "#44cc44",
+            borderRadius = 2,
+        }
+        hpBg:AddChild(hpFill)
 
         -- 存储渲染数据（与逻辑数据分离）
         renderData_[char] = {
             spine = spine,
             currentAnim = def.anims.idle,
             lastFlip = initFlip,
+            hpBar = hpBg,
+            hpFill = hpFill,
         }
 
         table.insert(children, spine)
+        table.insert(children, hpBg)
     end
 
     local container = UI.Panel {
@@ -76,10 +101,8 @@ function M.CreateSpines(characters)
         children = children,
     }
 
-    print("[CharRender] CreateSpines: created " .. #children .. " spine widgets")
+    print("[CharRender] CreateSpines: created " .. #children .. " widgets (spine + hp bars)")
 
-    -- 延迟打印 Spine 数据尺寸（需要等 Spine 加载完成）
-    -- 我们在第一帧 Update 中打印
     return container
 end
 
@@ -252,6 +275,34 @@ function M.Update(characters, camera)
         -- 也设置 props.flipX（备份：当 dataW > 0 时 Render 内部会用它）
         spine.props.flipX = info.flip
 
+        -- 更新血条位置和填充
+        local rd = info.rd
+        if rd.hpBar then
+            local hpRatio = math.max(0, info.char.hp / Config.MaxHP)
+            local barX = math.floor(info.sx - HP_BAR_WIDTH / 2)
+            local barY = math.floor(info.sy - HP_BAR_OFFSET_Y)
+            rd.hpBar:SetStyle({
+                left = barX,
+                top = barY,
+                zIndex = 100 + i,  -- 血条始终在角色上层
+            })
+            -- 更新填充宽度
+            local fillW = math.floor(HP_BAR_WIDTH * hpRatio)
+            rd.hpFill:SetWidth(math.max(0, fillW))
+            -- 颜色：绿→黄→红 渐变
+            if hpRatio > 0.6 then
+                rd.hpFill:SetStyle({ backgroundColor = "#44cc44" })  -- 绿
+            elseif hpRatio > 0.3 then
+                rd.hpFill:SetStyle({ backgroundColor = "#cccc22" })  -- 黄
+            else
+                rd.hpFill:SetStyle({ backgroundColor = "#cc3333" })  -- 红
+            end
+            -- 死亡/濒死时隐藏血条
+            if info.char.state == "dying" or info.char.state == "dead" then
+                rd.hpBar:SetVisible(false)
+            end
+        end
+
         -- 调试
         if not debugPrinted_ and frameCount_ >= 3 and i <= 2 then
             print(string.format(
@@ -274,6 +325,7 @@ function M.Clear(characters)
         local rd = renderData_[char]
         if rd then
             rd.spine:SetVisible(false)
+            if rd.hpBar then rd.hpBar:SetVisible(false) end
             renderData_[char] = nil
         end
     end
