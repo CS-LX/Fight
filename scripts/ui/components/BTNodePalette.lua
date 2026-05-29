@@ -102,9 +102,17 @@ function BTNodePalette.Create(props)
                 bounces = false,
                 flexGrow = 1,
                 flexShrink = 1,
-                padding = 10,
-                flexDirection = "column",
-                children = children,
+                children = {
+                    -- wrapper: padding在此层确保bottom padding计入contentHeight
+                    UI.Panel {
+                        width = "100%",
+                        flexShrink = 0,
+                        flexDirection = "column",
+                        padding = 10,
+                        gap = 2,
+                        children = children,
+                    }
+                },
             }
         },
     }
