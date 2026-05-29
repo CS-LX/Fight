@@ -165,7 +165,7 @@ function BoneFrameEditor.Create(opts)
     local function BuildTimeline()
         local trackHeight = 26
         local headerW = 60
-        local timelineW = 200
+        local timelineW = 400
         local totalW = headerW + timelineW
         local duration = phaseData.duration
 

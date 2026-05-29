@@ -41,8 +41,7 @@ local attributesPanel_ = nil
 -- 底部摘要标签
 ---@type Widget|nil
 local summaryLabel_ = nil
----@type Widget|nil
-local previewSpine_ = nil
+
 
 -- Tab 组件引用
 local mainTabApi_ = nil         -- FolderTabs API
@@ -166,17 +165,8 @@ local function ReadArtExtFromUI()
     return result
 end
 
---- 更新预览 Spine 颜色/速率
+--- 更新预览（底部预览已移除，保留空函数避免调用处报错）
 local function UpdatePreviewSpine()
-    if not previewSpine_ or not app_sliderR_ then return end
-    if app_artMode_ == "sprite_bone" then return end -- sprite_bone模式无Spine预览
-    if not previewSpine_.SetColor then return end  -- 安全检查
-    local r = app_sliderR_:GetValue() / 100
-    local g = app_sliderG_:GetValue() / 100
-    local b = app_sliderB_:GetValue() / 100
-    previewSpine_:SetColor(r, g, b, 1.0)
-    local speed = app_sliderAnimSpeed_:GetValue() / 100
-    previewSpine_:SetTimeScale(speed)
 end
 
 -- ============================================================================
@@ -374,7 +364,7 @@ local function CreateAppearancePanel(art)
     })
 
     -- 模式内容容器
-    app_modeContainer_ = UI.Panel { width = "100%", flexGrow = 1 }
+    app_modeContainer_ = UI.Panel { width = "100%" }
 
     -- 根据当前模式初始化内容
     local initContent
@@ -821,44 +811,14 @@ function M.Open(opts)
         onSwitch = function(id) SwitchTab(id) end,
     })
 
-    -- 底部预览
-    if (mod.art.mode or "spine") == "sprite_bone" then
-        previewSpine_ = UI.Panel {
-            width = 80, height = 100,
-            backgroundColor = {100, 130, 200, 200},
-            borderRadius = 6,
-            justifyContent = "center", alignItems = "center",
-            children = {
-                UI.Label { text = "骨骼", fontSize = 11, fontColor = {255,255,255,255} },
-            },
-        }
-    else
-        previewSpine_ = UI.Spine {
-            src = mod.art.spineSrc,
-            animation = mod.art.anims.idle,
-            loop = true,
-            width = 80, height = 100,
-            pma = mod.art.pma,
-        }
-    end
-
     -- 底部摘要
     summaryLabel_ = UI.Label {
         text = "",
         fontSize = 12,
         fontColor = { 200, 200, 200, 255 },
         flexGrow = 1,
-        marginLeft = 10,
     }
     UpdateSummary()
-
-    -- 初始预览颜色
-    if mod.art.tint then
-        previewSpine_:SetColor(mod.art.tint.r, mod.art.tint.g, mod.art.tint.b, 1.0)
-    end
-    if mod.art.animSpeed then
-        previewSpine_:SetTimeScale(mod.art.animSpeed)
-    end
 
     -- 组装主布局
     root_ = UI.Panel {
@@ -912,13 +872,12 @@ function M.Open(opts)
             },
             -- 底部状态栏
             UI.Panel {
-                width = "100%", height = 56,
+                width = "100%", height = 40,
                 flexDirection = "row",
                 alignItems = "center",
                 backgroundColor = { 25, 25, 35, 255 },
                 paddingLeft = 10, paddingRight = 10,
                 children = {
-                    previewSpine_,
                     summaryLabel_,
                 },
             },
@@ -941,7 +900,6 @@ function M.Close()
     behaviourPanel_ = nil
     attributesPanel_ = nil
     contentArea_ = nil
-    previewSpine_ = nil
     summaryLabel_ = nil
     btCanvasApi_ = nil
     mainTabApi_ = nil
