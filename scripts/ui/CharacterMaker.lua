@@ -267,6 +267,7 @@ local function CreateBehaviourPanel()
     local BTCanvas = require("ui.components.BTCanvas")
     local BTNodePalette = require("ui.components.BTNodePalette")
     local BTInspector = require("ui.components.BTInspector")
+    local BTPresets = require("data.bt_presets")
 
     local inspectorApi = nil
     local canvas = nil
@@ -276,6 +277,25 @@ local function CreateBehaviourPanel()
         height = "100%",
         onSelectionChanged = function(node)
             if inspectorApi then inspectorApi.UpdateSelection(node) end
+        end,
+    }
+
+    -- 预设下拉选项
+    local presetOptions = {}
+    for _, p in ipairs(BTPresets.list) do
+        presetOptions[#presetOptions + 1] = { label = p.name, value = p.id }
+    end
+
+    local presetDropdown = UI.Dropdown {
+        width = 180,
+        placeholder = "载入预设...",
+        options = presetOptions,
+        onChange = function(self, value)
+            local presetData = BTPresets.Get(value)
+            if presetData and canvas then
+                canvas:ClearAll()
+                canvas:LoadTreeData(presetData)
+            end
         end,
     }
 
@@ -332,11 +352,31 @@ local function CreateBehaviourPanel()
 
     return UI.Panel {
         width = "100%", height = "100%",
-        flexDirection = "row",
+        flexDirection = "column",
         children = {
-            palette,
-            canvas,
-            inspectorPanel,
+            -- 顶部工具栏：预设选择
+            UI.Panel {
+                width = "100%", height = 36,
+                flexDirection = "row",
+                alignItems = "center",
+                paddingLeft = 8,
+                gap = 8,
+                backgroundColor = {35, 35, 40, 255},
+                children = {
+                    UI.Label { text = "预设:", fontSize = 12, color = {180, 180, 180, 255} },
+                    presetDropdown,
+                },
+            },
+            -- 主体区域
+            UI.Panel {
+                width = "100%", flexGrow = 1,
+                flexDirection = "row",
+                children = {
+                    palette,
+                    canvas,
+                    inspectorPanel,
+                },
+            },
         },
     }
 end
@@ -448,6 +488,23 @@ local function DoExport()
     local mod = CharRegistry.Get(editModuleId_)
     if not mod then return end
     local data = CharModule.Serialize(mod)
+    -- 将画布中的完整行为树数据嵌入导出配置
+    local treeData = nil
+    if btCanvasApi_ then
+        treeData = btCanvasApi_:GetTreeData()
+    end
+    -- 如果画布未初始化，从自定义或默认数据获取
+    if not treeData or not treeData.nodes or next(treeData.nodes) == nil then
+        treeData = AI.GetCustomTreeData() or AI.GetDefaultTreeData()
+    end
+    if treeData and treeData.nodes and next(treeData.nodes) ~= nil then
+        -- 通过 encode+decode 做深拷贝，避免引用问题
+        local ok2, copy = pcall(function()
+            return cjson.decode(cjson.encode(treeData))
+        end)
+        data.ai.behaviourTree = ok2 and copy or treeData
+    end
+    data.ai.profile = nil  -- 移除旧的 profile 字段
     local json = cjson.encode(data)
 
     -- 关闭已有弹窗

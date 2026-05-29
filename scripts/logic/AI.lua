@@ -10,7 +10,8 @@ local Config = require("Config")
 local Battle = require("logic.Battle")
 local AIProfiles = require("characters.AIProfiles")
 local BTCompiler = require("logic.BTCompiler")
-local DefaultBTData = require("data.default_bt")
+local BTPresets = require("data.bt_presets")
+local DefaultBTData = BTPresets.aggressive  -- 默认使用激进预设
 
 local M = {}
 
