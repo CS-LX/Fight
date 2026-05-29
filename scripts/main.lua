@@ -2,12 +2,14 @@
 -- main.lua - 3D 竞技场对战游戏（入口）
 -- Spine 2D 角色 + 3D 竞技场 | 45度俯视角
 -- ============================================================================
+-- 架构：逻辑层（logic/）驱动数据 → 表现层（render/）驱动视觉
 
 local Config = require("Config")
 local Arena = require("Arena")
-local Character = require("Character")
-local Battle = require("Battle")
-local AI = require("AI")
+local CharLogic = require("logic.CharLogic")
+local Battle = require("logic.Battle")
+local AI = require("logic.AI")
+local CharRender = require("render.CharRender")
 local GameUI = require("GameUI")
 
 -- ============================================================================
@@ -20,12 +22,15 @@ local cameraNode_ = nil
 ---@type Camera
 local camera_ = nil
 
---- 角色数据列表
+--- 角色逻辑数据列表
 ---@type table[]
 local characters_ = {}
 
 --- 游戏状态 "playing" | "redWin" | "blueWin"
 local gameState_ = "playing"
+
+--- 当前使用的角色定义ID
+local CHAR_DEF_ID = "wisdel"
 
 -- ============================================================================
 -- 生命周期
@@ -38,11 +43,11 @@ function Start()
     CreateScene()
     SetupCamera()
     Arena.Create(scene_)
-    characters_ = Character.SpawnTeams()
+    characters_ = CharLogic.SpawnTeams(CHAR_DEF_ID)
     GameUI.CreateHUD(characters_, ResetGame)
     SubscribeToEvent("Update", "HandleUpdate")
 
-    print("=== 3D Arena Battle Started (Spine) ===")
+    print("=== 3D Arena Battle Started (Modular) ===")
     print("Red Team vs Blue Team, " .. Config.TeamSize .. " vs " .. Config.TeamSize)
 end
 
@@ -90,9 +95,10 @@ function UpdateGameLogic(dt)
     local redAlive = 0
     local blueAlive = 0
 
+    -- 逻辑层更新：AI决策 + 战斗状态
     for _, char in ipairs(characters_) do
         AI.Update(char, characters_, dt)
-        Battle.UpdateAnimation(char, dt)
+        Battle.UpdateState(char, dt)
 
         if char.state ~= "dead" and char.state ~= "dying" then
             if char.team == "red" then
@@ -103,10 +109,10 @@ function UpdateGameLogic(dt)
         end
     end
 
-    -- 更新 Spine 角色屏幕位置
-    GameUI.UpdateSpinePositions(characters_, camera_)
+    -- 表现层更新：Spine 位置/缩放/排序/动画/翻转
+    CharRender.Update(characters_, camera_)
 
-    -- 更新UI计数
+    -- HUD 更新
     GameUI.UpdateCounts(redAlive, blueAlive)
 
     -- 胜负判定
@@ -123,16 +129,17 @@ end
 
 --- 重置游戏
 function ResetGame()
-    -- 清除旧 Spine 控件
-    GameUI.ClearSpines(characters_)
+    -- 清除旧渲染数据
+    CharRender.Clear(characters_)
     characters_ = {}
 
-    -- 重新生成
-    characters_ = Character.SpawnTeams()
+    -- 重新生成逻辑数据
+    characters_ = CharLogic.SpawnTeams(CHAR_DEF_ID)
     gameState_ = "playing"
 
-    -- 重建 UI
-    GameUI.RebuildHUD(characters_, ResetGame)
+    -- 重建 UI（含新 Spine 层）
+    GameUI.CreateHUD(characters_, ResetGame)
+    GameUI.ResetStatus()
     print("=== Game Reset ===")
 end
 

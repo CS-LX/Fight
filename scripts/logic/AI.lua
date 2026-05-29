@@ -1,9 +1,10 @@
 -- ============================================================================
--- AI.lua - AI 行为（寻敌 + 移动/攻击决策）
+-- logic/AI.lua - AI 行为（寻敌 + 移动/攻击决策）
 -- ============================================================================
+-- 纯逻辑层：只修改角色数据，不触碰 UI
 
 local Config = require("Config")
-local Battle = require("Battle")
+local Battle = require("logic.Battle")
 
 local M = {}
 
@@ -32,7 +33,7 @@ function M.FindNearestEnemy(char, characters)
     return nearest
 end
 
---- 更新单个角色AI
+--- 更新单个角色AI（纯逻辑：位置+状态+朝向）
 ---@param char table
 ---@param characters table[]
 ---@param dt number
@@ -57,14 +58,13 @@ function M.Update(char, characters, dt)
     if dist <= Config.AttackRange then
         -- 在攻击范围内 → 攻击
         char.state = "attacking"
-        -- 面向目标
         char.facingRight = (dx > 0)
         if char.attackCooldown <= 0 then
             Battle.PerformAttack(char, target)
             char.attackCooldown = Config.AttackCooldown
         end
     else
-        -- 向目标移动（整体赋值 Vector3，避免 tolua++ 值类型问题）
+        -- 向目标移动
         char.state = "moving"
         local invDist = 1.0 / dist
         local dirX = dx * invDist
@@ -72,8 +72,6 @@ function M.Update(char, characters, dt)
         local newX = mx + dirX * char.speed * dt
         local newZ = mz + dirZ * char.speed * dt
         char.worldPos = Vector3(newX, my, newZ)
-
-        -- 面向移动方向
         char.facingRight = (dirX > 0)
     end
 end
