@@ -34,7 +34,7 @@ end
 -- 血条配置
 local HP_BAR_WIDTH = 40    -- 血条宽度 (base pixels)
 local HP_BAR_HEIGHT = 5    -- 血条高度
-local HP_BAR_OFFSET_Y = 8  -- 血条在角色上方的偏移
+local HP_BAR_OFFSET_Y = -2 -- 血条在角色上方的偏移
 
 --- 为角色列表创建 Spine 控件
 ---@param characters table[] 逻辑数据列表
@@ -289,14 +289,9 @@ function M.Update(characters, camera)
             -- 更新填充宽度
             local fillW = math.floor(HP_BAR_WIDTH * hpRatio)
             rd.hpFill:SetWidth(math.max(0, fillW))
-            -- 颜色：绿→黄→红 渐变
-            if hpRatio > 0.6 then
-                rd.hpFill:SetStyle({ backgroundColor = "#44cc44" })  -- 绿
-            elseif hpRatio > 0.3 then
-                rd.hpFill:SetStyle({ backgroundColor = "#cccc22" })  -- 黄
-            else
-                rd.hpFill:SetStyle({ backgroundColor = "#cc3333" })  -- 红
-            end
+            -- 队伍颜色
+            local color = info.char.team == "red" and "#e84040" or "#4080e8"
+            rd.hpFill:SetStyle({ backgroundColor = color })
             -- 死亡/濒死时隐藏血条
             if info.char.state == "dying" or info.char.state == "dead" then
                 rd.hpBar:SetVisible(false)
