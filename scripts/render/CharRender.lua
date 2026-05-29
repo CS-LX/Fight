@@ -26,6 +26,7 @@ local function GetArtDef(moduleId)
     local mod = CharRegistry.Get(moduleId)
     if mod then
         return {
+            mode = mod.art.mode or "spine",
             spineSrc = mod.art.spineSrc,
             pma = mod.art.pma,
             anims = mod.art.anims,
@@ -35,10 +36,12 @@ local function GetArtDef(moduleId)
             scaleY = mod.art.scaleY or 1.0,
             animSpeed = mod.art.animSpeed or 1.0,
             glowColor = mod.art.glowColor,
+            frames = mod.art.frames,
         }
     end
     -- fallback：返回默认值
     return {
+        mode = "spine",
         spineSrc = "spine/build_char_1035_wisdel_game_9/build_char_1035_wisdel_game_9.skel",
         pma = true,
         anims = { idle = "Default", move = "Move", attack = "Interact", hit = "Interact", die = "Sleep", relax = "Relax" },
@@ -48,6 +51,7 @@ local function GetArtDef(moduleId)
         scaleY = 1.0,
         animSpeed = 1.0,
         glowColor = nil,
+        frames = nil,
     }
 end
 
@@ -84,18 +88,31 @@ function M.CreateSpines(characters)
 
         local initFlip = (char.team == "blue")
 
-        local spine = UI.Spine {
-            src = def.spineSrc,
-            animation = def.anims.idle,
-            loop = true,
-            width = 10,   -- 初始占位，Update 会在第一帧覆盖
-            height = 10,
-            position = "absolute",
-            left = 0,
-            top = 0,
-            flipX = initFlip,
-            pma = def.pma,
-        }
+        local spine
+        if def.mode == "sprite_bone" then
+            -- sprite_bone 模式：占位色块（后续替换为骨骼渲染）
+            spine = UI.Panel {
+                width = 48,
+                height = 64,
+                position = "absolute",
+                left = 0, top = 0,
+                backgroundColor = {100, 130, 200, 220},
+                borderRadius = 4,
+            }
+        else
+            spine = UI.Spine {
+                src = def.spineSrc,
+                animation = def.anims.idle,
+                loop = true,
+                width = 10,
+                height = 10,
+                position = "absolute",
+                left = 0,
+                top = 0,
+                flipX = initFlip,
+                pma = def.pma,
+            }
+        end
 
         -- 血条背景（深灰底）
         local hpBg = UI.Panel {
@@ -162,18 +179,27 @@ function M.AddOne(char)
     local def = GetArtDef(char.defId)
     local initFlip = (char.team == "blue")
 
-    local spine = UI.Spine {
-        src = def.spineSrc,
-        animation = def.anims.idle,
-        loop = true,
-        width = 10,
-        height = 10,
-        position = "absolute",
-        left = 0,
-        top = 0,
-        flipX = initFlip,
-        pma = def.pma,
-    }
+    local spine
+    if def.mode == "sprite_bone" then
+        spine = UI.Panel {
+            width = 48, height = 64,
+            position = "absolute",
+            left = 0, top = 0,
+            backgroundColor = {100, 130, 200, 220},
+            borderRadius = 4,
+        }
+    else
+        spine = UI.Spine {
+            src = def.spineSrc,
+            animation = def.anims.idle,
+            loop = true,
+            width = 10, height = 10,
+            position = "absolute",
+            left = 0, top = 0,
+            flipX = initFlip,
+            pma = def.pma,
+        }
+    end
 
     local hpBg = UI.Panel {
         width = HP_BAR_WIDTH,

@@ -13,6 +13,9 @@ local CharModule = require("characters.CharModule")
 local CharRegistry = require("characters.CharRegistry")
 local BTCompiler = require("logic.BTCompiler")
 local AI = require("logic.AI")
+local AssetLibrary = require("data.asset_library")
+local BoneFrameEditor = require("ui.components.BoneFrameEditor")
+local FolderTabs = require("ui.components.FolderTabs")
 
 local M = {}
 
@@ -41,10 +44,10 @@ local summaryLabel_ = nil
 ---@type Widget|nil
 local previewSpine_ = nil
 
--- Tab 按钮引用（高亮切换用）
-local tabBtnAppearance_ = nil
-local tabBtnBehaviour_ = nil
-local tabBtnAttributes_ = nil
+-- Tab 组件引用
+local mainTabApi_ = nil         -- FolderTabs API
+local modeSwitchApi_ = nil      -- PillToggle API (mode)
+local phaseSwitchApi_ = nil     -- PillToggle API (phase)
 
 -- 外部回调
 local onClose_ = nil
@@ -72,6 +75,14 @@ local app_glowToggle_ = nil
 local app_sliderGlowR_ = nil
 local app_sliderGlowG_ = nil
 local app_sliderGlowB_ = nil
+
+-- 外观模式相关
+local app_artMode_ = "spine"       -- "spine" | "sprite_bone"
+local app_boneEditorApi_ = nil     -- BoneFrameEditor API
+local app_currentPhase_ = "idle"   -- 当前编辑阶段
+local app_spineDropdown_ = nil     -- Spine选择下拉
+local app_modeContainer_ = nil     -- 模式切换后的内容容器
+local app_phaseFrames_ = nil       -- sprite_bone: 各阶段帧数据引用
 
 -- 行为树画布引用
 local btCanvasApi_ = nil
@@ -129,27 +140,37 @@ end
 
 --- 从外观面板读取 art 扩展数据
 local function ReadArtExtFromUI()
-    if not app_sliderR_ then return {} end
-    return {
-        tint = {
+    local result = { mode = app_artMode_ }
+
+    if app_artMode_ == "spine" then
+        -- Spine 模式：染色/缩放/光环
+        if not app_sliderR_ then return result end
+        result.tint = {
             r = app_sliderR_:GetValue() / 100,
             g = app_sliderG_:GetValue() / 100,
             b = app_sliderB_:GetValue() / 100,
-        },
-        scaleX = app_sliderScaleX_:GetValue() / 100,
-        scaleY = app_sliderScaleY_:GetValue() / 100,
-        animSpeed = app_sliderAnimSpeed_:GetValue() / 100,
-        glowColor = (app_glowToggle_ and app_glowToggle_.checked) and {
+        }
+        result.scaleX = app_sliderScaleX_:GetValue() / 100
+        result.scaleY = app_sliderScaleY_:GetValue() / 100
+        result.animSpeed = app_sliderAnimSpeed_:GetValue() / 100
+        result.glowColor = (app_glowToggle_ and app_glowToggle_.checked) and {
             r = app_sliderGlowR_:GetValue() / 100,
             g = app_sliderGlowG_:GetValue() / 100,
             b = app_sliderGlowB_:GetValue() / 100,
-        } or nil,
-    }
+        } or nil
+    elseif app_artMode_ == "sprite_bone" then
+        -- 骨骼动画模式：帧数据
+        result.frames = app_phaseFrames_
+    end
+
+    return result
 end
 
 --- 更新预览 Spine 颜色/速率
 local function UpdatePreviewSpine()
     if not previewSpine_ or not app_sliderR_ then return end
+    if app_artMode_ == "sprite_bone" then return end -- sprite_bone模式无Spine预览
+    if not previewSpine_.SetColor then return end  -- 安全检查
     local r = app_sliderR_:GetValue() / 100
     local g = app_sliderG_:GetValue() / 100
     local b = app_sliderB_:GetValue() / 100
@@ -162,8 +183,8 @@ end
 -- 子面板创建
 -- ============================================================================
 
---- 创建外观面板 Widget
-local function CreateAppearancePanel(art)
+--- 创建 Spine 模式子面板（染色/缩放/光环/动画选择）
+local function CreateSpineModeContent(art)
     local initR = math.floor((art.tint and art.tint.r or 1.0) * 100)
     local initG = math.floor((art.tint and art.tint.g or 1.0) * 100)
     local initB = math.floor((art.tint and art.tint.b or 1.0) * 100)
@@ -202,11 +223,48 @@ local function CreateAppearancePanel(art)
     app_sliderGlowG_ = UI.Slider { value = initGG, min = 0, max = 100, step = 5, width = "100%" }
     app_sliderGlowB_ = UI.Slider { value = initGB, min = 0, max = 100, step = 5, width = "100%" }
 
+    -- Spine 文件选择下拉
+    local spineOptions = {}
+    local spineSelectedIdx = 1
+    for i, sp in ipairs(AssetLibrary.spines) do
+        spineOptions[#spineOptions + 1] = { label = sp.name, value = sp.id }
+        if sp.src == art.spineSrc then spineSelectedIdx = i end
+    end
+
+    app_spineDropdown_ = UI.Dropdown {
+        options = spineOptions,
+        selectedIndex = spineSelectedIdx,
+        width = "100%", height = 32,
+        fontSize = 12,
+        onChange = function(self, idx)
+            -- 切换 Spine 源和默认动画映射
+            local spData = AssetLibrary.spines[idx]
+            if spData then
+                local mod = CharRegistry.Get(editModuleId_)
+                if mod then
+                    mod.art.spineSrc = spData.src
+                    mod.art.pma = spData.pma
+                    -- 更新动画映射为新Spine的可用动画
+                    local animList = spData.anims or {}
+                    if #animList > 0 then
+                        mod.art.anims.idle = animList[1] or "Default"
+                        mod.art.anims.move = animList[2] or animList[1]
+                        mod.art.anims.attack = animList[3] or animList[1]
+                        mod.art.anims.hit = animList[3] or animList[1]
+                        mod.art.anims.die = animList[4] or animList[1]
+                        mod.art.anims.relax = animList[5] or animList[1]
+                    end
+                    UpdatePreviewSpine()
+                end
+            end
+        end,
+    }
+
     return UI.Panel {
-        width = "100%", height = "100%",
-        padding = 14, gap = 4,
-        overflow = "scroll",
+        width = "100%", gap = 4,
         children = {
+            SectionLabel("── Spine 资源 ──"),
+            PropLabel("Spine 文件"), app_spineDropdown_,
             SectionLabel("── 角色染色 ──"),
             PropLabel("红 (R)"), app_sliderR_,
             PropLabel("绿 (G)"), app_sliderG_,
@@ -224,6 +282,125 @@ local function CreateAppearancePanel(art)
             PropLabel("光环 R"), app_sliderGlowR_,
             PropLabel("光环 G"), app_sliderGlowG_,
             PropLabel("光环 B"), app_sliderGlowB_,
+        },
+    }
+end
+
+--- 创建 SpriteBone 模式子面板（阶段切换 + 骨骼帧编辑器）
+local function CreateSpriteBoneModeContent(art)
+    -- 初始化帧数据
+    app_phaseFrames_ = art.frames or CharModule.CreateDefaultFrames()
+    app_currentPhase_ = "idle"
+
+    -- 阶段切换 PillToggle（多按钮）
+    local phaseTabs = {}
+    for _, p in ipairs(CharModule.PHASES) do
+        phaseTabs[#phaseTabs + 1] = { id = p, label = CharModule.PHASE_NAMES[p], color = { 100, 220, 180 } }
+    end
+
+    local phasePill
+    phasePill, phaseSwitchApi_ = FolderTabs.CreatePillToggle({
+        tabs = phaseTabs,
+        activeId = app_currentPhase_,
+        height = 28,
+        fontSize = 11,
+        onSwitch = function(id)
+            app_currentPhase_ = id
+            -- 切换编辑器数据
+            if app_boneEditorApi_ then
+                local phaseD = app_phaseFrames_[id]
+                if not phaseD then
+                    phaseD = CharModule.CreateDefaultPhase(id)
+                    app_phaseFrames_[id] = phaseD
+                end
+                app_boneEditorApi_.SetPhaseData(phaseD, id)
+            end
+        end,
+    })
+
+    -- 创建骨骼帧编辑器
+    local initPhaseData = app_phaseFrames_[app_currentPhase_]
+    if not initPhaseData then
+        initPhaseData = CharModule.CreateDefaultPhase(app_currentPhase_)
+        app_phaseFrames_[app_currentPhase_] = initPhaseData
+    end
+
+    local editorWidget, editorApi = BoneFrameEditor.Create({
+        phaseData = initPhaseData,
+        phase = app_currentPhase_,
+        onChange = function()
+            -- 数据已原地修改，标记脏
+        end,
+    })
+    app_boneEditorApi_ = editorApi
+
+    return UI.Panel {
+        width = "100%", gap = 6,
+        children = {
+            SectionLabel("── 动画阶段 ──"),
+            phasePill,
+            UI.Divider { marginTop = 4, marginBottom = 4 },
+            editorWidget,
+        },
+    }
+end
+
+--- 创建外观面板 Widget（带模式切换）
+local function CreateAppearancePanel(art)
+    app_artMode_ = art.mode or "spine"
+
+    -- 模式切换 PillToggle
+    local modePill
+    modePill, modeSwitchApi_ = FolderTabs.CreatePillToggle({
+        tabs = {
+            { id = "spine",       label = "Spine模式",   color = { 80, 180, 255 } },
+            { id = "sprite_bone", label = "骨骼动画模式", color = { 200, 140, 255 } },
+        },
+        activeId = app_artMode_,
+        height = 32,
+        fontSize = 12,
+        onSwitch = function(id)
+            app_artMode_ = id
+            -- 重建模式内容
+            if app_modeContainer_ then
+                app_modeContainer_:RemoveAllChildren()
+                if id == "sprite_bone" then
+                    app_modeContainer_:AddChild(CreateSpriteBoneModeContent(art))
+                else
+                    app_modeContainer_:AddChild(CreateSpineModeContent(art))
+                end
+            end
+        end,
+    })
+
+    -- 模式内容容器
+    app_modeContainer_ = UI.Panel { width = "100%", flexGrow = 1 }
+
+    -- 根据当前模式初始化内容
+    local initContent
+    if app_artMode_ == "sprite_bone" then
+        initContent = CreateSpriteBoneModeContent(art)
+    else
+        initContent = CreateSpineModeContent(art)
+    end
+    app_modeContainer_:AddChild(initContent)
+
+    return UI.Panel {
+        width = "100%", height = "100%",
+        padding = 14, gap = 6,
+        overflow = "scroll",
+        children = {
+            -- 模式切换（Pill Toggle）
+            UI.Panel {
+                width = "100%", flexDirection = "row", gap = 8, alignItems = "center",
+                children = {
+                    UI.Label { text = "渲染模式", fontSize = 11, fontColor = {140,145,160,200}, marginRight = 4 },
+                    UI.Panel { flexGrow = 1, children = { modePill } },
+                },
+            },
+            UI.Divider { marginTop = 4, marginBottom = 4 },
+            -- 模式内容
+            app_modeContainer_,
         },
     }
 end
@@ -385,24 +562,9 @@ end
 -- Tab 切换逻辑
 -- ============================================================================
 
-local function HighlightTab(tab)
-    local activeColor = { 80, 140, 255, 255 }
-    local inactiveColor = { 60, 60, 70, 255 }
-    if tabBtnAppearance_ then
-        tabBtnAppearance_:SetBackgroundColor(tab == "appearance" and activeColor or inactiveColor)
-    end
-    if tabBtnBehaviour_ then
-        tabBtnBehaviour_:SetBackgroundColor(tab == "behaviour" and activeColor or inactiveColor)
-    end
-    if tabBtnAttributes_ then
-        tabBtnAttributes_:SetBackgroundColor(tab == "attributes" and activeColor or inactiveColor)
-    end
-end
-
 local function SwitchTab(tab)
     if currentTab_ == tab then return end
     currentTab_ = tab
-    HighlightTab(tab)
 
     if appearancePanel_ then appearancePanel_:Hide() end
     if behaviourPanel_ then behaviourPanel_:Hide() end
@@ -444,12 +606,17 @@ local function DoSave()
 
     -- 读取外观面板
     local artExt = ReadArtExtFromUI()
-    if artExt.tint then
-        mod.art.tint = artExt.tint
-        mod.art.scaleX = artExt.scaleX
-        mod.art.scaleY = artExt.scaleY
-        mod.art.animSpeed = artExt.animSpeed
-        mod.art.glowColor = artExt.glowColor
+    mod.art.mode = artExt.mode or "spine"
+    if artExt.mode == "spine" then
+        if artExt.tint then
+            mod.art.tint = artExt.tint
+            mod.art.scaleX = artExt.scaleX
+            mod.art.scaleY = artExt.scaleY
+            mod.art.animSpeed = artExt.animSpeed
+            mod.art.glowColor = artExt.glowColor
+        end
+    elseif artExt.mode == "sprite_bone" then
+        mod.art.frames = artExt.frames
     end
 
     -- 保存行为树
@@ -641,34 +808,39 @@ function M.Open(opts)
     behaviourPanel_:Hide()
     attributesPanel_:Hide()
 
-    -- Tab 按钮
-    local activeColor = { 80, 140, 255, 255 }
-    local inactiveColor = { 60, 60, 70, 255 }
+    -- Tab 栏（Folder Tabs 风格）
+    local mainTabBar
+    mainTabBar, mainTabApi_ = FolderTabs.CreateFolderTabs({
+        tabs = {
+            { id = "appearance", label = "外观" },
+            { id = "behaviour",  label = "行为树" },
+            { id = "attributes", label = "属性" },
+        },
+        activeId = "appearance",
+        height = 36,
+        onSwitch = function(id) SwitchTab(id) end,
+    })
 
-    tabBtnAppearance_ = UI.Button {
-        text = "外观", width = 80, height = 32,
-        backgroundColor = activeColor,
-        onClick = function() SwitchTab("appearance") end,
-    }
-    tabBtnBehaviour_ = UI.Button {
-        text = "行为树", width = 80, height = 32,
-        backgroundColor = inactiveColor,
-        onClick = function() SwitchTab("behaviour") end,
-    }
-    tabBtnAttributes_ = UI.Button {
-        text = "属性", width = 80, height = 32,
-        backgroundColor = inactiveColor,
-        onClick = function() SwitchTab("attributes") end,
-    }
-
-    -- 底部 Spine 预览
-    previewSpine_ = UI.Spine {
-        src = mod.art.spineSrc,
-        animation = mod.art.anims.idle,
-        loop = true,
-        width = 80, height = 100,
-        pma = mod.art.pma,
-    }
+    -- 底部预览
+    if (mod.art.mode or "spine") == "sprite_bone" then
+        previewSpine_ = UI.Panel {
+            width = 80, height = 100,
+            backgroundColor = {100, 130, 200, 200},
+            borderRadius = 6,
+            justifyContent = "center", alignItems = "center",
+            children = {
+                UI.Label { text = "骨骼", fontSize = 11, fontColor = {255,255,255,255} },
+            },
+        }
+    else
+        previewSpine_ = UI.Spine {
+            src = mod.art.spineSrc,
+            animation = mod.art.anims.idle,
+            loop = true,
+            width = 80, height = 100,
+            pma = mod.art.pma,
+        }
+    end
 
     -- 底部摘要
     summaryLabel_ = UI.Label {
@@ -726,20 +898,8 @@ function M.Open(opts)
                     },
                 },
             },
-            -- Tab 栏
-            UI.Panel {
-                width = "100%", height = 38,
-                flexDirection = "row",
-                alignItems = "center",
-                backgroundColor = { 35, 35, 45, 255 },
-                paddingLeft = 10,
-                gap = 6,
-                children = {
-                    tabBtnAppearance_,
-                    tabBtnBehaviour_,
-                    tabBtnAttributes_,
-                },
-            },
+            -- Tab 栏（Folder Tabs）
+            mainTabBar,
             -- 内容区
             UI.Panel {
                 width = "100%", flexGrow = 1,
@@ -784,6 +944,9 @@ function M.Close()
     previewSpine_ = nil
     summaryLabel_ = nil
     btCanvasApi_ = nil
+    mainTabApi_ = nil
+    modeSwitchApi_ = nil
+    phaseSwitchApi_ = nil
     -- 清空控件引用
     attr_nameField_ = nil
     attr_speedSlider_ = nil
