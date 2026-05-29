@@ -55,12 +55,7 @@ function M.CreateSpines(characters)
             pma = def.pma,
         }
 
-        -- 队伍着色（明显差异便于识别）
-        if char.team == "red" then
-            spine:SetColor(1.0, 0.6, 0.6, 1.0)  -- 明显红色调
-        else
-            spine:SetColor(0.5, 0.5, 1.0, 1.0)  -- 明显蓝色调
-        end
+        -- 无队伍着色，保持原始颜色
 
         -- 存储渲染数据（与逻辑数据分离）
         renderData_[char] = {

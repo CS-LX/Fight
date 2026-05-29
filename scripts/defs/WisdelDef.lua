@@ -31,7 +31,7 @@ local M = {
     },
 
     -- 元数据
-    renderScale = 0.15,    -- 直接 Spine 缩放系数（0.15 ≈ 角色约占屏幕高度 10-12%）
+    renderScale = 0.30,    -- 直接 Spine 缩放系数
 
     -- 逻辑属性默认值（可被全局 Config 覆盖）
     baseSpeed = 2.5,
