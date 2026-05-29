@@ -6,11 +6,9 @@
 
 local UI = require("urhox-libs/UI")
 local Config = require("Config")
+local CharRegistry = require("characters.CharRegistry")
 
 local M = {}
-
--- 角色定义缓存（defId → def table）
-local defCache_ = {}
 
 -- 渲染数据（与逻辑数据分离）
 -- key = char (引用), value = { spine, currentAnim, lastFlip }
@@ -21,14 +19,26 @@ local debugPrinted_ = false
 -- 调试：帧计数
 local frameCount_ = 0
 
---- 获取角色定义（带缓存）
----@param defId string
----@return table
-local function GetDef(defId)
-    if not defCache_[defId] then
-        defCache_[defId] = require("defs." .. defId:sub(1, 1):upper() .. defId:sub(2) .. "Def")
+--- 获取角色的美术配置（从 CharRegistry 模块读取）
+---@param moduleId string
+---@return table 兼容旧 def 格式的 art 数据
+local function GetArtDef(moduleId)
+    local mod = CharRegistry.Get(moduleId)
+    if mod then
+        return {
+            spineSrc = mod.art.spineSrc,
+            pma = mod.art.pma,
+            anims = mod.art.anims,
+            renderScale = mod.art.renderScale,
+        }
     end
-    return defCache_[defId]
+    -- fallback：返回默认值
+    return {
+        spineSrc = "spine/build_char_1035_wisdel_game_9/build_char_1035_wisdel_game_9.skel",
+        pma = true,
+        anims = { idle = "Default", move = "Move", attack = "Interact", hit = "Interact", die = "Sleep", relax = "Relax" },
+        renderScale = 0.30,
+    }
 end
 
 -- 血条配置
@@ -43,7 +53,7 @@ function M.CreateSpines(characters)
     local children = {}
 
     for _, char in ipairs(characters) do
-        local def = GetDef(char.defId)
+        local def = GetArtDef(char.defId)
 
         local initFlip = (char.team == "blue")
 
@@ -112,7 +122,7 @@ local function UpdateAnimation(char)
     local rd = renderData_[char]
     if not rd then return end
 
-    local def = GetDef(char.defId)
+    local def = GetArtDef(char.defId)
     local targetAnim = def.anims[char.animState] or def.anims.idle
     local loop = (char.animState == "idle" or char.animState == "move")
 
@@ -201,7 +211,7 @@ function M.Update(characters, camera)
         local dist = toChar:Length()
 
         -- 透视缩放：远的小，近的大
-        local def = GetDef(char.defId)
+        local def = GetArtDef(char.defId)
         local perspScale = refDist / math.max(dist, 0.1)
         perspScale = math.max(0.5, math.min(perspScale, 1.5))
 
@@ -278,7 +288,7 @@ function M.Update(characters, camera)
         -- 更新血条位置和填充
         local rd = info.rd
         if rd.hpBar then
-            local hpRatio = math.max(0, info.char.hp / Config.MaxHP)
+            local hpRatio = math.max(0, info.char.hp / info.char.maxHP)
             local barX = math.floor(info.sx - HP_BAR_WIDTH / 2)
             local barY = math.floor(info.sy - HP_BAR_OFFSET_Y)
             rd.hpBar:SetStyle({

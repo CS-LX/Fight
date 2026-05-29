@@ -11,11 +11,12 @@ local M = {}
 -- 死亡动画时长（秒）
 M.DEATH_DURATION = 1.2
 
---- 执行攻击（纯逻辑）
+--- 执行攻击（纯逻辑，伤害从角色模块读取）
 ---@param attacker table
 ---@param target table
 function M.PerformAttack(attacker, target)
-    target.hp = target.hp - Config.AttackDamage
+    local damage = attacker.attackDamage or Config.AttackDamage
+    target.hp = target.hp - damage
 
     -- 设置攻击动画状态
     attacker.animState = "attack"

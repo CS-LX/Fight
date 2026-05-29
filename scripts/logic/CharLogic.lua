@@ -3,31 +3,49 @@
 -- ============================================================================
 -- 职责：创建角色逻辑数据、生成队伍
 -- 不依赖：UI、Spine、GameUI
+-- 从 CharRegistry 读取角色模块数据
 
 local Config = require("Config")
+local CharRegistry = require("characters.CharRegistry")
 
 local M = {}
 
 --- 创建一个角色的逻辑数据
----@param defId string 角色定义ID（对应 defs/ 中的文件）
+---@param moduleId string 角色模块ID（CharRegistry 中的ID）
 ---@param team string "red" | "blue"
 ---@param spawnPos Vector3
 ---@return table 角色逻辑数据
-function M.Create(defId, team, spawnPos)
+function M.Create(moduleId, team, spawnPos)
+    local mod = CharRegistry.Get(moduleId)
+    -- fallback：如果模块不存在则使用全局 Config
+    local baseHP = mod and mod.config.baseHP or Config.MaxHP
+    local baseSpeed = mod and mod.config.baseSpeed or Config.CharSpeed
+    local attackDamage = mod and mod.config.attackDamage or Config.AttackDamage
+    local attackRange = mod and mod.config.attackRange or Config.AttackRange
+    local attackCooldownMax = mod and mod.config.attackCooldown or Config.AttackCooldown
+    local aiProfile = mod and mod.ai.profile or "aggressive"
+
     local char = {
         -- 身份
-        defId = defId,            -- 角色定义ID，表现层据此查找外观
+        moduleId = moduleId,      -- 角色模块ID（新系统）
+        defId = moduleId,         -- 兼容旧表现层
         team = team,
 
         -- 空间
         worldPos = Vector3(spawnPos.x, spawnPos.y, spawnPos.z),
         facingRight = (team == "red"),
 
-        -- 战斗
-        hp = Config.MaxHP,
-        maxHP = Config.MaxHP,
-        speed = Config.CharSpeed + math.random() * 0.5,
+        -- 战斗（从模块读取）
+        hp = baseHP,
+        maxHP = baseHP,
+        speed = baseSpeed + math.random() * 0.5,
+        attackDamage = attackDamage,
+        attackRange = attackRange,
+        attackCooldownMax = attackCooldownMax,
         attackCooldown = 0,
+
+        -- AI
+        aiProfile = aiProfile,
 
         -- 状态（供 AI / 状态机驱动）
         state = "moving",       -- "moving" | "attacking" | "dying" | "dead"
@@ -41,9 +59,9 @@ function M.Create(defId, team, spawnPos)
 end
 
 --- 生成两队角色
----@param defId string 角色定义ID
+---@param moduleId string 角色模块ID
 ---@return table[] 角色逻辑数据列表
-function M.SpawnTeams(defId)
+function M.SpawnTeams(moduleId)
     local characters = {}
     local halfWidth = Config.ArenaWidth / 2 - 2
     local spacing = (Config.ArenaDepth - 4) / (Config.TeamSize - 1)
@@ -52,7 +70,7 @@ function M.SpawnTeams(defId)
     for i = 1, Config.TeamSize do
         local z = -Config.ArenaDepth / 2 + 2 + (i - 1) * spacing
         local spawnPos = Vector3(-halfWidth, 0, z)
-        local char = M.Create(defId, "red", spawnPos)
+        local char = M.Create(moduleId, "red", spawnPos)
         table.insert(characters, char)
     end
 
@@ -60,7 +78,7 @@ function M.SpawnTeams(defId)
     for i = 1, Config.TeamSize do
         local z = -Config.ArenaDepth / 2 + 2 + (i - 1) * spacing
         local spawnPos = Vector3(halfWidth, 0, z)
-        local char = M.Create(defId, "blue", spawnPos)
+        local char = M.Create(moduleId, "blue", spawnPos)
         table.insert(characters, char)
     end
 

@@ -6,8 +6,15 @@
 local UI = require("urhox-libs/UI")
 local Config = require("Config")
 local CharRender = require("render.CharRender")
+local CharCustomUI = require("CharCustomUI")
+local CharRegistry = require("characters.CharRegistry")
+local BehaviourTreeEditor = require("ui.BehaviourTreeEditor")
 
 local M = {}
+
+-- 外部回调：当保存自定义角色后使用该角色重开游戏
+---@type function|nil
+local onUseCustomChar_ = nil
 
 -- UI 引用
 ---@type Widget|nil
@@ -32,7 +39,7 @@ function M.Shutdown()
     UI.Shutdown()
 end
 
---- 创建完整游戏 HUD（含角色 Spine 层）
+--- 创建完整游戏 HUD（含角色 Spine 层 + 自定义面板）
 ---@param characters table[] 逻辑数据列表
 ---@param onReset function 重置回调
 function M.CreateHUD(characters, onReset)
@@ -84,6 +91,36 @@ function M.CreateHUD(characters, onReset)
         end,
     }
 
+    -- 自定义角色按钮
+    local customBtn = UI.Button {
+        text = "Custom",
+        width = 100,
+        height = 36,
+        position = "absolute",
+        bottom = 20,
+        right = 126,
+        onClick = function(self)
+            if CharCustomUI.IsVisible() then
+                CharCustomUI.Hide()
+            else
+                CharCustomUI.ShowNew()
+            end
+        end,
+    }
+
+    -- 行为树编辑器按钮
+    local btEditBtn = UI.Button {
+        text = "BT Edit",
+        width = 100,
+        height = 36,
+        position = "absolute",
+        bottom = 20,
+        right = 236,
+        onClick = function(self)
+            M.OpenBTEditor()
+        end,
+    }
+
     local root = UI.Panel {
         width = "100%",
         height = "100%",
@@ -94,10 +131,26 @@ function M.CreateHUD(characters, onReset)
             blueCountLabel_,
             statusLabel_,
             resetBtn,
+            customBtn,
+            btEditBtn,
         }
     }
 
     UI.SetRoot(root)
+
+    -- 创建自定义角色面板（挂载到根容器，初始隐藏）
+    CharCustomUI.Create(root, function(mod)
+        -- 保存后：使用该自定义角色重新开始
+        if onUseCustomChar_ then
+            onUseCustomChar_(mod.id)
+        end
+    end, nil)
+end
+
+--- 设置"使用自定义角色"的回调
+---@param fn function(moduleId: string)
+function M.SetOnUseCustomChar(fn)
+    onUseCustomChar_ = fn
 end
 
 --- 更新队伍存活计数
@@ -125,6 +178,42 @@ function M.ResetStatus()
     if statusLabel_ then
         statusLabel_:SetText("FIGHT!")
     end
+end
+
+-- ============================================================================
+-- 行为树编辑器集成
+-- ============================================================================
+
+--- 缓存的行为树数据（编辑器关闭后保留）
+local btEditorData_ = nil
+
+--- 重建游戏 HUD 的回调引用
+local cachedCharacters_ = nil
+local cachedOnReset_ = nil
+
+--- 打开行为树编辑器
+function M.OpenBTEditor()
+    BehaviourTreeEditor.Open({
+        initialData = btEditorData_,
+        onSave = function(data)
+            btEditorData_ = data
+            print("[GameUI] BT data saved (" .. (data and #(data.edges or {}) or 0) .. " edges)")
+        end,
+        onClose = function()
+            -- 恢复游戏 HUD
+            if cachedCharacters_ and cachedOnReset_ then
+                M.CreateHUD(cachedCharacters_, cachedOnReset_)
+            end
+        end,
+    })
+end
+
+--- 缓存角色和重置回调（供编辑器关闭时恢复HUD用）
+local _originalCreateHUD = M.CreateHUD
+function M.CreateHUD(characters, onReset)
+    cachedCharacters_ = characters
+    cachedOnReset_ = onReset
+    _originalCreateHUD(characters, onReset)
 end
 
 return M

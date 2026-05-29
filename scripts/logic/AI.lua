@@ -8,6 +8,7 @@
 local BT = require("lib.behaviourtree")
 local Config = require("Config")
 local Battle = require("logic.Battle")
+local AIProfiles = require("characters.AIProfiles")
 
 local M = {}
 
@@ -73,11 +74,12 @@ local function HasEnemy()
     })
 end
 
---- 条件：敌人在攻击范围内
+--- 条件：敌人在攻击范围内（使用角色自身 attackRange × profile 倍率）
 local function InAttackRange()
     return BT.Task:new({
         run = function(task, ctx)
-            if ctx.enemy and ctx.enemyDist <= Config.AttackRange then
+            local range = ctx.char.attackRange * ctx.profileParams.attackRangeMul
+            if ctx.enemy and ctx.enemyDist <= range then
                 task:success()
             else
                 task:fail()
@@ -86,7 +88,7 @@ local function InAttackRange()
     })
 end
 
---- 动作：攻击当前目标
+--- 动作：攻击当前目标（使用角色自身属性）
 local function Attack()
     return BT.Task:new({
         run = function(task, ctx)
@@ -104,10 +106,10 @@ local function Attack()
             char.state = "attacking"
             char.animState = "attack"
 
-            -- 检查冷却
+            -- 检查冷却（使用角色自身属性 × profile 倍率）
             if char.attackCooldown <= 0 then
                 Battle.PerformAttack(char, enemy)
-                char.attackCooldown = Config.AttackCooldown
+                char.attackCooldown = char.attackCooldownMax * ctx.profileParams.cooldownMul
             end
 
             task:success()  -- 攻击是瞬时动作，完成后重新评估
@@ -115,7 +117,7 @@ local function Attack()
     })
 end
 
---- 动作：追击目标
+--- 动作：追击目标（速度受 profile 倍率影响）
 local function Chase()
     return BT.Task:new({
         run = function(task, ctx)
@@ -131,7 +133,8 @@ local function Chase()
             local dz = enemy.worldPos.z - char.worldPos.z
             local dist = math.sqrt(dx * dx + dz * dz)
 
-            if dist <= Config.AttackRange then
+            local range = char.attackRange * ctx.profileParams.attackRangeMul
+            if dist <= range then
                 task:success()  -- 已经到达攻击范围
                 return
             end
@@ -140,8 +143,9 @@ local function Chase()
             local dirX = dx * invDist
             local dirZ = dz * invDist
 
-            local newX = char.worldPos.x + dirX * char.speed * ctx.dt
-            local newZ = char.worldPos.z + dirZ * char.speed * ctx.dt
+            local speed = char.speed * ctx.profileParams.chaseSpeedMul
+            local newX = char.worldPos.x + dirX * speed * ctx.dt
+            local newZ = char.worldPos.z + dirZ * speed * ctx.dt
             char.worldPos = ClampToArena(Vector3(newX, char.worldPos.y, newZ))
             char.facingRight = (dirX > 0)
             char.state = "moving"
@@ -152,7 +156,7 @@ local function Chase()
     })
 end
 
---- 动作：随机巡逻（无敌人时闲逛）
+--- 动作：随机巡逻（无敌人时闲逛，速度受 profile 倍率影响）
 local function Patrol()
     return BT.Task:new({
         start = function(task, ctx)
@@ -186,7 +190,7 @@ local function Patrol()
             local dirX = dx * invDist
             local dirZ = dz * invDist
 
-            local speed = char.speed * 0.5  -- 巡逻走慢一点
+            local speed = char.speed * ctx.profileParams.patrolSpeedMul
             local newX = char.worldPos.x + dirX * speed * ctx.dt
             local newZ = char.worldPos.z + dirZ * speed * ctx.dt
             char.worldPos = ClampToArena(Vector3(newX, char.worldPos.y, newZ))
@@ -261,6 +265,9 @@ function M.Update(char, characters, dt)
         trees_[char] = CreateTree(char)
     end
 
+    -- 获取 AI profile 参数
+    local profileParams = AIProfiles.Get(char.aiProfile or "aggressive")
+
     -- 更新上下文（blackboard）
     local tree = trees_[char]
     local ctx = tree.object
@@ -269,6 +276,7 @@ function M.Update(char, characters, dt)
     ctx.dt = dt
     ctx.enemy = nil
     ctx.enemyDist = 0
+    ctx.profileParams = profileParams
 
     -- Tick 行为树
     tree:run()

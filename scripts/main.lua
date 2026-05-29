@@ -6,11 +6,13 @@
 
 local Config = require("Config")
 local Arena = require("Arena")
+local CharRegistry = require("characters.CharRegistry")
 local CharLogic = require("logic.CharLogic")
 local Battle = require("logic.Battle")
 local AI = require("logic.AI")
 local CharRender = require("render.CharRender")
 local GameUI = require("GameUI")
+local CharCustomUI = require("CharCustomUI")
 
 -- ============================================================================
 -- 全局状态
@@ -39,11 +41,22 @@ local CHAR_DEF_ID = "wisdel"
 function Start()
     graphics.windowTitle = Config.Title
 
+    -- 初始化角色注册表（加载预设 + 恢复持久化角色）
+    CharRegistry.Init()
+
     GameUI.Init()
     CreateScene()
     SetupCamera()
     Arena.Create(scene_)
     characters_ = CharLogic.SpawnTeams(CHAR_DEF_ID)
+
+    -- 设置自定义角色使用回调（保存后自动使用该角色重开）
+    GameUI.SetOnUseCustomChar(function(moduleId)
+        CHAR_DEF_ID = moduleId
+        ResetGame()
+        print("[Main] Switched to custom character: " .. moduleId)
+    end)
+
     GameUI.CreateHUD(characters_, ResetGame)
     SubscribeToEvent("Update", "HandleUpdate")
 
