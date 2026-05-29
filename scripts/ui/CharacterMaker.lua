@@ -442,16 +442,69 @@ local function DoSave()
     end
 end
 
---- 导出 JSON 到控制台
+--- 导出 JSON - 弹窗展示可复制文本
+local exportModal_ = nil
 local function DoExport()
     local mod = CharRegistry.Get(editModuleId_)
     if not mod then return end
     local data = CharModule.Serialize(mod)
     local json = cjson.encode(data)
-    print("=== CHARACTER EXPORT ===")
-    print(json)
-    print("=== END EXPORT ===")
-    UI.Toast { text = "已导出到控制台", duration = 2000 }
+
+    -- 关闭已有弹窗
+    if exportModal_ then
+        exportModal_:Close()
+    end
+
+    local jsonLabel = UI.Label {
+        text = json,
+        fontSize = 11,
+        fontFamily = "sans",
+        color = {220, 220, 220, 255},
+        width = "100%",
+    }
+
+    exportModal_ = UI.Modal {
+        title = "角色配置导出",
+        size = "lg",
+        onClose = function(self) self:Close() end,
+        children = {
+            UI.Panel {
+                width = "100%", height = 280,
+                backgroundColor = {30, 30, 30, 255},
+                borderRadius = 6,
+                padding = 10,
+                overflow = "scroll",
+                children = { jsonLabel },
+            },
+            UI.Panel {
+                width = "100%",
+                flexDirection = "row",
+                justifyContent = "flex-end",
+                gap = 8,
+                marginTop = 12,
+                children = {
+                    UI.Button {
+                        text = "复制",
+                        variant = "primary",
+                        size = "small",
+                        onClick = function()
+                            ui:SetClipboardText(json)
+                            UI.Toast { text = "已复制到剪贴板", duration = 1500 }
+                        end,
+                    },
+                    UI.Button {
+                        text = "关闭",
+                        size = "small",
+                        variant = "outlined",
+                        onClick = function()
+                            exportModal_:Close()
+                        end,
+                    },
+                },
+            },
+        },
+    }
+    exportModal_:Open()
 end
 
 --- 新建角色
