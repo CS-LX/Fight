@@ -1,21 +1,44 @@
 -- ============================================================================
--- ui/components/BoneFrameEditor.lua - 骨骼帧编辑器（关键帧时间轴）
+-- ui/components/BoneFrameEditor.lua - 可视化骨骼编辑器 + 时间轴帧编辑
 -- ============================================================================
--- 职责：
---   1. 显示当前阶段的骨骼列表（可添加/删除骨骼）
---   2. 时间轴：显示关键帧位置，可选中/添加/删除关键帧
---   3. 属性编辑：选中某帧某骨骼后编辑 x/y/rot/scale
---   4. 素材选择：为每根骨骼绑定素材（从asset_library选择）
---   5. 动画预览：通过NanoVG绘制色块骨骼的实时预览
+-- 布局设计（类 Spine 编辑器风格）：
+--   ┌──────────────────────────────────────────┐
+--   │  [可视化骨骼预览区]  色块骨骼实时摆放   │
+--   ├──────────────────────────────────────────┤
+--   │  时间轴 Dopesheet：                      │
+--   │  骨骼1  ●────●────●                     │
+--   │  骨骼2  ●─────────●                     │
+--   │  骨骼3  ●────●                          │
+--   │  [+帧] [-帧] [时长: 1.0s]               │
+--   ├──────────────────────────────────────────┤
+--   │  选中骨骼属性：素材/父骨骼/锚点/变换    │
+--   └──────────────────────────────────────────┘
 
 local UI = require("urhox-libs/UI")
 local CharModule = require("characters.CharModule")
 local AssetLibrary = require("data.asset_library")
 
--- ============================================================================
--- Module
--- ============================================================================
 local BoneFrameEditor = {}
+
+-- 颜色配置
+local COLORS = {
+    previewBg       = { 22, 24, 32, 255 },
+    gridLine        = { 40, 42, 52, 120 },
+    boneNormal      = { 100, 130, 200, 220 },
+    boneSelected    = { 120, 220, 255, 255 },
+    boneBorder      = { 200, 220, 255, 100 },
+    timelineBg      = { 28, 30, 38, 255 },
+    trackBg         = { 36, 38, 48, 255 },
+    trackAlt        = { 32, 34, 44, 255 },
+    trackSelected   = { 45, 60, 90, 255 },
+    keyDot          = { 255, 200, 80, 255 },
+    keyDotSelected  = { 255, 120, 80, 255 },
+    playhead        = { 255, 80, 80, 200 },
+    propBg          = { 30, 32, 40, 255 },
+    textDim         = { 130, 135, 150, 200 },
+    textBright      = { 220, 225, 240, 255 },
+    accent          = { 80, 180, 255, 255 },
+}
 
 --- 创建骨骼帧编辑器
 ---@param opts {phaseData: SpritePhaseData, phase: string, onChange: fun()|nil}
@@ -27,11 +50,11 @@ function BoneFrameEditor.Create(opts)
 
     -- 内部状态
     local selectedBoneIdx = 1
-    local selectedKeyTime = 0.0
-    local keyTimes = {}  -- 排序后的关键帧时间列表
+    local selectedKeyIdx = 1   -- 在 keyTimes 中的索引
+    local keyTimes = {}
 
     -- ========================================================================
-    -- 辅助
+    -- 辅助函数
     -- ========================================================================
     local function NotifyChange()
         if onChange then onChange() end
@@ -43,8 +66,15 @@ function BoneFrameEditor.Create(opts)
             keyTimes[#keyTimes + 1] = t
         end
         table.sort(keyTimes)
+        -- 修正选择索引
+        if selectedKeyIdx > #keyTimes then selectedKeyIdx = #keyTimes end
+        if selectedKeyIdx < 1 then selectedKeyIdx = 1 end
     end
     RebuildKeyTimes()
+
+    local function GetSelectedTime()
+        return keyTimes[selectedKeyIdx] or 0.0
+    end
 
     local function GetBoneKF(boneId, time)
         local frame = phaseData.keyframes[time]
@@ -63,177 +93,307 @@ function BoneFrameEditor.Create(opts)
     end
 
     -- ========================================================================
-    -- UI 引用（需要动态更新）
+    -- 面板引用
     -- ========================================================================
-    local boneListPanel = nil
-    local keyframeBar = nil
-    local propPanel = nil
-    local timeLabel = nil
-    local durationSlider = nil
+    local mainPanel = nil
+    local timelineContainer = nil
+    local propContainer = nil
+    local previewContainer = nil
+    local timeInfoLabel = nil
 
     -- ========================================================================
-    -- 骨骼列表区
+    -- 可视化骨骼预览（色块拼接显示当前帧所有骨骼）
     -- ========================================================================
-    local function BuildBoneItem(bone, idx)
-        local isSelected = (idx == selectedBoneIdx)
-        return UI.Button {
-            text = bone.id .. " [" .. bone.sprite .. "]",
-            width = "100%", height = 28,
-            fontSize = 11,
-            variant = isSelected and "primary" or "default",
-            onClick = function()
-                selectedBoneIdx = idx
-                RefreshAll()
-            end,
-        }
-    end
+    local function BuildPreviewPanel()
+        local time = GetSelectedTime()
+        local boneWidgets = {}
 
-    local function BuildBoneList()
-        local items = {}
         for i, bone in ipairs(phaseData.bones) do
-            items[#items + 1] = BuildBoneItem(bone, i)
-        end
-        -- 添加骨骼按钮
-        items[#items + 1] = UI.Button {
-            text = "+ 添加骨骼",
-            width = "100%", height = 26,
-            fontSize = 11, variant = "outline",
-            marginTop = 4,
-            onClick = function()
-                local newId = "bone_" .. (#phaseData.bones + 1)
-                local newBone = {
-                    id = newId,
-                    sprite = "body_rect",
-                    parent = phaseData.bones[1] and phaseData.bones[1].id or nil,
-                    pivotX = 0, pivotY = 0,
+            local kf = GetBoneKF(bone.id, time)
+            local spriteInfo = AssetLibrary.GetSprite(bone.sprite)
+            local w = spriteInfo and spriteInfo.width or 20
+            local h = spriteInfo and spriteInfo.height or 20
+            local color = spriteInfo and spriteInfo.color or COLORS.boneNormal
+            local isSelected = (i == selectedBoneIdx)
+
+            -- 计算位置（锚点 + 关键帧偏移）
+            local px = 90 + (bone.pivotX or 0) + (kf.x or 0)
+            local py = 70 + (bone.pivotY or 0) + (kf.y or 0)
+
+            boneWidgets[#boneWidgets + 1] = UI.Panel {
+                position = "absolute",
+                left = px - w / 2,
+                top = py - h / 2,
+                width = w,
+                height = h,
+                backgroundColor = color,
+                borderRadius = (bone.sprite and bone.sprite:find("round")) and math.min(w, h) / 2 or 3,
+                borderWidth = isSelected and 2 or 0,
+                borderColor = COLORS.boneSelected,
+                onClick = function()
+                    selectedBoneIdx = i
+                    RefreshAll()
+                end,
+            }
+
+            -- 骨骼名标签
+            if isSelected then
+                boneWidgets[#boneWidgets + 1] = UI.Label {
+                    text = bone.id,
+                    position = "absolute",
+                    left = px - 14,
+                    top = py + h / 2 + 2,
+                    fontSize = 8,
+                    fontColor = COLORS.accent,
                 }
-                phaseData.bones[#phaseData.bones + 1] = newBone
-                -- 为所有已有关键帧添加此骨骼默认值
-                for t, frame in pairs(phaseData.keyframes) do
-                    if not frame[newId] then
-                        frame[newId] = { x = 0, y = 0, rot = 0, scaleX = 1, scaleY = 1 }
-                    end
-                end
-                selectedBoneIdx = #phaseData.bones
-                NotifyChange()
-                RefreshAll()
-            end,
+            end
+        end
+
+        return UI.Panel {
+            width = "100%",
+            height = 180,
+            backgroundColor = COLORS.previewBg,
+            borderRadius = 6,
+            overflow = "hidden",
+            children = boneWidgets,
         }
-        return items
     end
 
     -- ========================================================================
-    -- 时间轴关键帧区
+    -- 时间轴 Dopesheet（骨骼轨道 + 关键帧圆点）
     -- ========================================================================
-    local function BuildKeyframeButtons()
-        local btns = {}
-        for i, t in ipairs(keyTimes) do
-            local isSelected = (math.abs(t - selectedKeyTime) < 0.001)
-            local label = string.format("%.2fs", t)
-            btns[#btns + 1] = UI.Button {
-                text = label,
-                width = 56, height = 26,
-                fontSize = 10,
-                variant = isSelected and "primary" or "default",
+    local function BuildTimeline()
+        local trackHeight = 26
+        local headerW = 60
+        local timelineW = 200
+        local totalW = headerW + timelineW
+        local duration = phaseData.duration
+
+        local tracks = {}
+
+        for i, bone in ipairs(phaseData.bones) do
+            local isSelected = (i == selectedBoneIdx)
+            local bgColor = isSelected and COLORS.trackSelected or (i % 2 == 0 and COLORS.trackAlt or COLORS.trackBg)
+
+            -- 骨骼名标签（左侧轨道头）
+            local trackLabel = UI.Panel {
+                width = headerW,
+                height = trackHeight,
+                justifyContent = "center",
+                paddingLeft = 6,
+                backgroundColor = bgColor,
                 onClick = function()
-                    selectedKeyTime = t
+                    selectedBoneIdx = i
                     RefreshAll()
                 end,
+                children = {
+                    UI.Label {
+                        text = bone.id,
+                        fontSize = 10,
+                        fontColor = isSelected and COLORS.accent or COLORS.textDim,
+                    },
+                },
+            }
+
+            -- 关键帧点（右侧时间区域）
+            local dots = {}
+            for ki, t in ipairs(keyTimes) do
+                local xPos = math.floor(t / duration * (timelineW - 16)) + 4
+                local isKeySelected = (ki == selectedKeyIdx)
+                local dotColor = isKeySelected and COLORS.keyDotSelected or COLORS.keyDot
+                local dotSize = isKeySelected and 10 or 7
+
+                dots[#dots + 1] = UI.Panel {
+                    position = "absolute",
+                    left = xPos,
+                    top = math.floor((trackHeight - dotSize) / 2),
+                    width = dotSize,
+                    height = dotSize,
+                    borderRadius = dotSize / 2,
+                    backgroundColor = dotColor,
+                    onClick = function()
+                        selectedKeyIdx = ki
+                        selectedBoneIdx = i
+                        RefreshAll()
+                    end,
+                }
+            end
+
+            -- 轨道线条（连接各关键帧）
+            local trackLine = UI.Panel {
+                width = timelineW,
+                height = trackHeight,
+                backgroundColor = bgColor,
+                position = "relative",
+                children = dots,
+            }
+
+            -- 一行轨道 = 标签 + 时间区
+            tracks[#tracks + 1] = UI.Panel {
+                width = "100%",
+                height = trackHeight,
+                flexDirection = "row",
+                children = { trackLabel, trackLine },
             }
         end
-        -- 添加关键帧按钮
-        btns[#btns + 1] = UI.Button {
-            text = "+帧",
-            width = 42, height = 26,
-            fontSize = 10, variant = "outline",
-            onClick = function()
-                -- 在最后一帧后0.25s添加新帧
-                local lastT = keyTimes[#keyTimes] or 0.0
-                local newT = math.floor((lastT + 0.25) * 100 + 0.5) / 100
-                -- 复制最后一帧数据作为新帧
-                local lastFrame = phaseData.keyframes[lastT]
-                local newFrame = {}
-                if lastFrame then
-                    for boneId, kf in pairs(lastFrame) do
-                        newFrame[boneId] = { x = kf.x, y = kf.y, rot = kf.rot, scaleX = kf.scaleX or 1, scaleY = kf.scaleY or 1 }
-                    end
-                else
-                    for _, bone in ipairs(phaseData.bones) do
-                        newFrame[bone.id] = { x = 0, y = 0, rot = 0, scaleX = 1, scaleY = 1 }
-                    end
-                end
-                phaseData.keyframes[newT] = newFrame
-                RebuildKeyTimes()
-                selectedKeyTime = newT
-                NotifyChange()
-                RefreshAll()
-            end,
+
+        -- 时间刻度头（显示时间标记）
+        local scaleMarks = {}
+        local numMarks = math.max(2, math.floor(duration / 0.25) + 1)
+        numMarks = math.min(numMarks, 9)  -- 最多显示9个标记
+        for m = 0, numMarks - 1 do
+            local t = m * (duration / (numMarks - 1))
+            local xPos = math.floor(t / duration * (timelineW - 16)) + 4
+            scaleMarks[#scaleMarks + 1] = UI.Label {
+                text = string.format("%.1f", t),
+                position = "absolute",
+                left = xPos - 6,
+                top = 0,
+                fontSize = 8,
+                fontColor = COLORS.textDim,
+            }
+        end
+
+        local scaleBar = UI.Panel {
+            width = "100%", height = 16,
+            flexDirection = "row",
+            children = {
+                UI.Panel { width = headerW, height = 16 },  -- 空占位对齐
+                UI.Panel {
+                    width = timelineW, height = 16,
+                    position = "relative",
+                    children = scaleMarks,
+                },
+            },
         }
-        -- 删除当前帧按钮（至少保留1帧）
-        if #keyTimes > 1 then
-            btns[#btns + 1] = UI.Button {
-                text = "-帧",
-                width = 42, height = 26,
-                fontSize = 10, variant = "danger",
-                onClick = function()
-                    phaseData.keyframes[selectedKeyTime] = nil
-                    RebuildKeyTimes()
-                    selectedKeyTime = keyTimes[1] or 0.0
-                    NotifyChange()
-                    RefreshAll()
-                end,
-            }
-        end
-        return btns
+
+        -- 底部控制栏：帧操作 + 时长
+        local controlBar = UI.Panel {
+            width = "100%", height = 32,
+            flexDirection = "row",
+            alignItems = "center",
+            gap = 6,
+            paddingLeft = 4,
+            marginTop = 4,
+            children = {
+                UI.Button {
+                    text = "+帧", width = 42, height = 24, fontSize = 10, variant = "outlined", size = "small",
+                    onClick = function()
+                        local lastT = keyTimes[#keyTimes] or 0.0
+                        local newT = math.floor((lastT + 0.25) * 100 + 0.5) / 100
+                        -- 复制最后一帧数据
+                        local lastFrame = phaseData.keyframes[lastT]
+                        local newFrame = {}
+                        if lastFrame then
+                            for boneId, kf in pairs(lastFrame) do
+                                newFrame[boneId] = { x = kf.x, y = kf.y, rot = kf.rot, scaleX = kf.scaleX or 1, scaleY = kf.scaleY or 1 }
+                            end
+                        else
+                            for _, bone in ipairs(phaseData.bones) do
+                                newFrame[bone.id] = { x = 0, y = 0, rot = 0, scaleX = 1, scaleY = 1 }
+                            end
+                        end
+                        phaseData.keyframes[newT] = newFrame
+                        RebuildKeyTimes()
+                        selectedKeyIdx = #keyTimes
+                        NotifyChange()
+                        RefreshAll()
+                    end,
+                },
+                (#keyTimes > 1) and UI.Button {
+                    text = "-帧", width = 42, height = 24, fontSize = 10, variant = "danger", size = "small",
+                    onClick = function()
+                        local t = GetSelectedTime()
+                        phaseData.keyframes[t] = nil
+                        RebuildKeyTimes()
+                        NotifyChange()
+                        RefreshAll()
+                    end,
+                } or UI.Panel { width = 1 },
+                UI.Panel { flexGrow = 1 },
+                UI.Label { text = "时长", fontSize = 10, fontColor = COLORS.textDim },
+                UI.Slider {
+                    value = math.floor(phaseData.duration * 100),
+                    min = 25, max = 300, step = 25,
+                    width = 80, height = 20,
+                    onChange = function(self, v)
+                        phaseData.duration = v / 100.0
+                        NotifyChange()
+                        RefreshAll()
+                    end,
+                },
+                UI.Label { text = string.format("%.2fs", phaseData.duration), fontSize = 10, fontColor = COLORS.textBright },
+            },
+        }
+
+        return UI.Panel {
+            width = "100%",
+            backgroundColor = COLORS.timelineBg,
+            borderRadius = 4,
+            padding = 4,
+            gap = 0,
+            children = {
+                scaleBar,
+                table.unpack(tracks),
+            },
+        }, controlBar
     end
 
     -- ========================================================================
-    -- 属性编辑区（选中骨骼 + 选中帧时显示）
+    -- 属性面板（选中骨骼 + 选中帧 的变换编辑）
     -- ========================================================================
-    local prop_x, prop_y, prop_rot, prop_sx, prop_sy
-    local prop_spriteDropdown, prop_parentDropdown
-    local prop_pivotX, prop_pivotY
-
     local function BuildPropPanel()
         local bone = phaseData.bones[selectedBoneIdx]
         if not bone then
-            return UI.Label { text = "无骨骼选中", fontSize = 12, fontColor = {120,120,120,255} }
+            return UI.Label { text = "无骨骼", fontSize = 11, fontColor = COLORS.textDim }
         end
 
-        local kf = GetBoneKF(bone.id, selectedKeyTime)
+        local time = GetSelectedTime()
+        local kf = GetBoneKF(bone.id, time)
 
-        -- 属性 slider 绑定
-        local function MakeKFSlider(label, value, min, max, step, field)
+        -- 属性行（紧凑 label + slider 单行）
+        local function PropRow(label, value, min, max, step, field, isPercent)
+            local displayVal = isPercent and tostring(math.floor(value)) .. "%" or tostring(value)
             return UI.Panel {
-                width = "100%", gap = 2,
+                width = "100%", height = 28,
+                flexDirection = "row", alignItems = "center", gap = 4,
                 children = {
-                    UI.Label { text = label .. ": " .. tostring(value), fontSize = 10, fontColor = {170,170,170,255} },
+                    UI.Label { text = label, fontSize = 10, fontColor = COLORS.textDim, width = 36 },
                     UI.Slider {
                         value = value, min = min, max = max, step = step,
-                        width = "100%", height = 24,
+                        width = 120, height = 18,
                         onChange = function(self, v)
-                            local curKF = GetBoneKF(bone.id, selectedKeyTime)
-                            curKF[field] = v
-                            SetBoneKF(bone.id, selectedKeyTime, curKF)
+                            local curKF = GetBoneKF(bone.id, time)
+                            if isPercent then
+                                curKF[field] = v / 100
+                            else
+                                curKF[field] = v
+                            end
+                            SetBoneKF(bone.id, time, curKF)
+                            -- 刷新预览
+                            if previewContainer then
+                                previewContainer:RemoveAllChildren()
+                                previewContainer:AddChild(BuildPreviewPanel())
+                            end
                         end,
                     },
+                    UI.Label { text = displayVal, fontSize = 9, fontColor = COLORS.textDim, width = 32 },
                 },
             }
         end
 
-        -- 素材选择下拉
+        -- 素材下拉
         local spriteOptions = {}
         local spriteIdx = 1
-        local allSprites = AssetLibrary.sprites
-        for i, sp in ipairs(allSprites) do
-            spriteOptions[#spriteOptions + 1] = { label = sp.name .. " (" .. sp.category .. ")", value = sp.id }
+        for i, sp in ipairs(AssetLibrary.sprites) do
+            spriteOptions[#spriteOptions + 1] = { label = sp.name, value = sp.id }
             if sp.id == bone.sprite then spriteIdx = i end
         end
 
-        -- 父骨骼选择
-        local parentOptions = { { label = "(无/根)", value = "__none__" } }
+        -- 父骨骼下拉
+        local parentOptions = { { label = "(根)", value = "__none__" } }
         local parentIdx = 1
-        for i, b in ipairs(phaseData.bones) do
+        for _, b in ipairs(phaseData.bones) do
             if b.id ~= bone.id then
                 parentOptions[#parentOptions + 1] = { label = b.id, value = b.id }
                 if b.id == bone.parent then parentIdx = #parentOptions end
@@ -243,188 +403,147 @@ function BoneFrameEditor.Create(opts)
         return UI.Panel {
             width = "100%", gap = 4,
             children = {
-                UI.Label { text = "骨骼: " .. bone.id, fontSize = 12, fontColor = {200,220,255,255} },
-                -- 素材选择
-                UI.Label { text = "素材", fontSize = 10, fontColor = {150,150,150,255} },
-                UI.Dropdown {
-                    options = spriteOptions,
-                    selectedIndex = spriteIdx,
-                    width = "100%", height = 30,
-                    fontSize = 11,
-                    onChange = function(self, idx)
-                        bone.sprite = spriteOptions[idx].value
-                        NotifyChange()
-                    end,
+                -- 骨骼标题行
+                UI.Panel {
+                    width = "100%", flexDirection = "row", alignItems = "center", gap = 8,
+                    children = {
+                        UI.Label { text = bone.id, fontSize = 12, fontColor = COLORS.accent },
+                        UI.Label { text = string.format("@ %.2fs", time), fontSize = 10, fontColor = COLORS.keyDot },
+                    },
                 },
-                -- 父骨骼
-                UI.Label { text = "父骨骼", fontSize = 10, fontColor = {150,150,150,255} },
-                UI.Dropdown {
-                    options = parentOptions,
-                    selectedIndex = parentIdx,
-                    width = "100%", height = 30,
-                    fontSize = 11,
-                    onChange = function(self, idx)
-                        local val = parentOptions[idx].value
-                        bone.parent = (val == "__none__") and nil or val
-                        NotifyChange()
-                    end,
-                },
-                -- 锚点
+                -- 素材 + 父骨骼（单行紧凑）
                 UI.Panel {
                     width = "100%", flexDirection = "row", gap = 6,
                     children = {
-                        UI.Panel { width = "48%", children = {
-                            UI.Label { text = "锚点X: " .. (bone.pivotX or 0), fontSize = 10, fontColor = {150,150,150,255} },
-                            UI.Slider { value = bone.pivotX or 0, min = -50, max = 50, step = 1, width = "100%",
-                                onChange = function(self, v) bone.pivotX = v; NotifyChange() end },
+                        UI.Panel { width = "50%", children = {
+                            UI.Label { text = "素材", fontSize = 9, fontColor = COLORS.textDim },
+                            UI.Dropdown {
+                                options = spriteOptions, selectedIndex = spriteIdx,
+                                width = "100%", height = 26, fontSize = 10,
+                                onChange = function(self, idx)
+                                    bone.sprite = spriteOptions[idx].value
+                                    NotifyChange()
+                                    if previewContainer then
+                                        previewContainer:RemoveAllChildren()
+                                        previewContainer:AddChild(BuildPreviewPanel())
+                                    end
+                                end,
+                            },
                         }},
-                        UI.Panel { width = "48%", children = {
-                            UI.Label { text = "锚点Y: " .. (bone.pivotY or 0), fontSize = 10, fontColor = {150,150,150,255} },
-                            UI.Slider { value = bone.pivotY or 0, min = -50, max = 50, step = 1, width = "100%",
-                                onChange = function(self, v) bone.pivotY = v; NotifyChange() end },
+                        UI.Panel { width = "50%", children = {
+                            UI.Label { text = "父骨骼", fontSize = 9, fontColor = COLORS.textDim },
+                            UI.Dropdown {
+                                options = parentOptions, selectedIndex = parentIdx,
+                                width = "100%", height = 26, fontSize = 10,
+                                onChange = function(self, idx)
+                                    local val = parentOptions[idx].value
+                                    bone.parent = (val == "__none__") and nil or val
+                                    NotifyChange()
+                                end,
+                            },
                         }},
                     },
                 },
-                -- 关键帧变换
-                UI.Divider { marginTop = 6, marginBottom = 6 },
-                UI.Label { text = string.format("帧 %.2fs 变换", selectedKeyTime), fontSize = 11, fontColor = {180,220,180,255} },
-                MakeKFSlider("X偏移", kf.x, -60, 60, 1, "x"),
-                MakeKFSlider("Y偏移", kf.y, -60, 60, 1, "y"),
-                MakeKFSlider("旋转°", kf.rot, -180, 180, 5, "rot"),
-                MakeKFSlider("缩放X%", math.floor((kf.scaleX or 1) * 100), 20, 200, 5, "scaleX"),
-                MakeKFSlider("缩放Y%", math.floor((kf.scaleY or 1) * 100), 20, 200, 5, "scaleY"),
-                -- 删除骨骼按钮
-                UI.Button {
-                    text = "删除此骨骼",
-                    width = "100%", height = 28,
-                    fontSize = 11, variant = "danger",
-                    marginTop = 10,
-                    onClick = function()
-                        if #phaseData.bones <= 1 then return end
-                        local removeId = bone.id
-                        table.remove(phaseData.bones, selectedBoneIdx)
-                        -- 从所有关键帧中移除
-                        for t, frame in pairs(phaseData.keyframes) do
-                            frame[removeId] = nil
-                        end
-                        -- 清除子骨骼的 parent 引用
-                        for _, b in ipairs(phaseData.bones) do
-                            if b.parent == removeId then b.parent = nil end
-                        end
-                        selectedBoneIdx = math.max(1, selectedBoneIdx - 1)
-                        NotifyChange()
-                        RefreshAll()
-                    end,
+                -- 变换属性
+                UI.Divider { marginTop = 2, marginBottom = 2 },
+                PropRow("X", kf.x, -60, 60, 1, "x", false),
+                PropRow("Y", kf.y, -60, 60, 1, "y", false),
+                PropRow("旋转", kf.rot, -180, 180, 5, "rot", false),
+                PropRow("缩放X", math.floor((kf.scaleX or 1) * 100), 20, 200, 5, "scaleX", true),
+                PropRow("缩放Y", math.floor((kf.scaleY or 1) * 100), 20, 200, 5, "scaleY", true),
+                -- 操作按钮行
+                UI.Panel {
+                    width = "100%", flexDirection = "row", gap = 6, marginTop = 6,
+                    children = {
+                        UI.Button {
+                            text = "+ 骨骼", height = 24, fontSize = 10, variant = "outlined", size = "small", flexGrow = 1,
+                            onClick = function()
+                                local newId = "bone_" .. (#phaseData.bones + 1)
+                                phaseData.bones[#phaseData.bones + 1] = {
+                                    id = newId, sprite = "body_rect",
+                                    parent = phaseData.bones[1] and phaseData.bones[1].id or nil,
+                                    pivotX = 0, pivotY = 0,
+                                }
+                                for t, frame in pairs(phaseData.keyframes) do
+                                    if not frame[newId] then
+                                        frame[newId] = { x = 0, y = 0, rot = 0, scaleX = 1, scaleY = 1 }
+                                    end
+                                end
+                                selectedBoneIdx = #phaseData.bones
+                                NotifyChange()
+                                RefreshAll()
+                            end,
+                        },
+                        (#phaseData.bones > 1) and UI.Button {
+                            text = "删除", height = 24, fontSize = 10, variant = "danger", size = "small", width = 50,
+                            onClick = function()
+                                local removeId = bone.id
+                                table.remove(phaseData.bones, selectedBoneIdx)
+                                for t, frame in pairs(phaseData.keyframes) do
+                                    frame[removeId] = nil
+                                end
+                                for _, b in ipairs(phaseData.bones) do
+                                    if b.parent == removeId then b.parent = nil end
+                                end
+                                selectedBoneIdx = math.max(1, selectedBoneIdx - 1)
+                                NotifyChange()
+                                RefreshAll()
+                            end,
+                        } or UI.Panel { width = 1 },
+                    },
                 },
             },
         }
     end
 
     -- ========================================================================
-    -- 整体布局
+    -- 刷新所有
     -- ========================================================================
-    local mainPanel = nil
-    local boneListContainer = nil
-    local kfBarContainer = nil
-    local propContainer = nil
-    local durationLabel = nil
-
     function RefreshAll()
         if not mainPanel then return end
-        -- 重建骨骼列表
-        if boneListContainer then
-            boneListContainer:RemoveAllChildren()
-            local items = BuildBoneList()
-            for _, item in ipairs(items) do
-                boneListContainer:AddChild(item)
-            end
+        if previewContainer then
+            previewContainer:RemoveAllChildren()
+            previewContainer:AddChild(BuildPreviewPanel())
         end
-        -- 重建时间轴
-        if kfBarContainer then
-            kfBarContainer:RemoveAllChildren()
-            local btns = BuildKeyframeButtons()
-            for _, btn in ipairs(btns) do
-                kfBarContainer:AddChild(btn)
-            end
+        if timelineContainer then
+            timelineContainer:RemoveAllChildren()
+            local timeline, controlBar = BuildTimeline()
+            timelineContainer:AddChild(timeline)
+            timelineContainer:AddChild(controlBar)
         end
-        -- 重建属性面板
         if propContainer then
             propContainer:RemoveAllChildren()
-            local pp = BuildPropPanel()
-            propContainer:AddChild(pp)
-        end
-        -- 更新时长标签
-        if durationLabel then
-            durationLabel:SetText(string.format("时长: %.2fs", phaseData.duration))
+            propContainer:AddChild(BuildPropPanel())
         end
     end
 
-    -- 时长控制
-    local durationRow = UI.Panel {
-        width = "100%", flexDirection = "row", alignItems = "center", gap = 8,
-        children = {
-            UI.Label { text = string.format("时长: %.2fs", phaseData.duration), fontSize = 11, fontColor = {200,200,200,255} },
-            UI.Slider {
-                value = math.floor(phaseData.duration * 100),
-                min = 25, max = 300, step = 25,
-                width = 140, height = 24,
-                onChange = function(self, v)
-                    phaseData.duration = v / 100.0
-                    NotifyChange()
-                    RefreshAll()
-                end,
-            },
-        },
-    }
-    durationLabel = durationRow:GetChildren()[1]
+    -- ========================================================================
+    -- 主布局
+    -- ========================================================================
+    previewContainer = UI.Panel { width = "100%" }
+    timelineContainer = UI.Panel { width = "100%", gap = 2 }
+    propContainer = UI.Panel { width = "100%" }
 
-    -- 骨骼列表容器
-    boneListContainer = UI.Panel {
-        width = "100%", gap = 2,
-    }
-
-    -- 关键帧条容器
-    kfBarContainer = UI.Panel {
-        width = "100%", flexDirection = "row", flexWrap = "wrap", gap = 4, alignItems = "center",
-    }
-
-    -- 属性容器
-    propContainer = UI.Panel {
-        width = "100%",
-    }
-
-    -- 主面板
     mainPanel = UI.Panel {
-        width = "100%", height = "100%",
-        padding = 8, gap = 6,
-        overflow = "scroll",
+        width = "100%",
+        gap = 8,
         children = {
-            -- 阶段和时长
-            UI.Panel {
-                width = "100%", flexDirection = "row", alignItems = "center", gap = 8,
-                children = {
-                    UI.Label {
-                        text = "阶段: " .. (CharModule.PHASE_NAMES[phase] or phase),
-                        fontSize = 13, fontColor = {150,200,255,255},
-                    },
-                },
-            },
-            durationRow,
-            -- 时间轴关键帧
-            UI.Divider {},
-            UI.Label { text = "关键帧时间轴", fontSize = 11, fontColor = {180,180,180,255} },
-            kfBarContainer,
-            -- 骨骼列表
-            UI.Divider {},
-            UI.Label { text = "骨骼列表", fontSize = 11, fontColor = {180,180,180,255} },
-            boneListContainer,
+            -- 骨骼可视化预览
+            previewContainer,
+            -- 时间轴 Dopesheet
+            timelineContainer,
             -- 属性编辑
-            UI.Divider {},
-            propContainer,
+            UI.Panel {
+                width = "100%",
+                backgroundColor = COLORS.propBg,
+                borderRadius = 4,
+                padding = 8,
+                children = { propContainer },
+            },
         },
     }
 
-    -- 初始化填充
+    -- 初始填充
     RefreshAll()
 
     -- ========================================================================
@@ -432,19 +551,16 @@ function BoneFrameEditor.Create(opts)
     -- ========================================================================
     local api = {}
 
-    --- 获取当前阶段数据
     function api.GetPhaseData()
         return phaseData
     end
 
-    --- 替换阶段数据（切换阶段时调用）
     function api.SetPhaseData(newData, newPhase)
         phaseData = newData
         phase = newPhase or phase
         selectedBoneIdx = 1
-        selectedKeyTime = 0.0
+        selectedKeyIdx = 1
         RebuildKeyTimes()
-        if #keyTimes > 0 then selectedKeyTime = keyTimes[1] end
         RefreshAll()
     end
 
