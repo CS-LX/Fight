@@ -14,11 +14,14 @@ local M = {}
 function M.FindNearestEnemy(char, characters)
     local nearestDist = math.huge
     local nearest = nil
-    local myPos = char.node.position
+    local mx = char.worldPos.x
+    local mz = char.worldPos.z
 
     for _, other in ipairs(characters) do
         if other.team ~= char.team and other.state ~= "dead" and other.state ~= "dying" then
-            local dist = (other.node.position - myPos):Length()
+            local dx = other.worldPos.x - mx
+            local dz = other.worldPos.z - mz
+            local dist = math.sqrt(dx * dx + dz * dz)
             if dist < nearestDist then
                 nearestDist = dist
                 nearest = other
@@ -44,28 +47,34 @@ function M.Update(char, characters, dt)
     if target == nil then return end
     char.target = target
 
-    local myPos = char.node.position
-    local targetPos = target.node.position
-    local diff = targetPos - myPos
-    local dist = diff:Length()
+    local mx = char.worldPos.x
+    local my = char.worldPos.y
+    local mz = char.worldPos.z
+    local dx = target.worldPos.x - mx
+    local dz = target.worldPos.z - mz
+    local dist = math.sqrt(dx * dx + dz * dz)
 
     if dist <= Config.AttackRange then
         -- 在攻击范围内 → 攻击
         char.state = "attacking"
+        -- 面向目标
+        char.facingRight = (dx > 0)
         if char.attackCooldown <= 0 then
             Battle.PerformAttack(char, target)
             char.attackCooldown = Config.AttackCooldown
         end
     else
-        -- 向目标移动
+        -- 向目标移动（整体赋值 Vector3，避免 tolua++ 值类型问题）
         char.state = "moving"
-        local dir = diff:Normalized()
-        local moveVec = dir * char.speed * dt
-        char.node.position = myPos + moveVec
+        local invDist = 1.0 / dist
+        local dirX = dx * invDist
+        local dirZ = dz * invDist
+        local newX = mx + dirX * char.speed * dt
+        local newZ = mz + dirZ * char.speed * dt
+        char.worldPos = Vector3(newX, my, newZ)
 
-        -- 面向目标（绕Y轴旋转）
-        local angle = math.atan(dir.x, dir.z)
-        char.node.rotation = Quaternion(math.deg(angle), Vector3.UP)
+        -- 面向移动方向
+        char.facingRight = (dirX > 0)
     end
 end
 

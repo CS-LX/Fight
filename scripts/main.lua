@@ -1,6 +1,6 @@
 -- ============================================================================
 -- main.lua - 3D 竞技场对战游戏（入口）
--- 模块化架构：Config / Arena / Character / Battle / AI / GameUI
+-- Spine 2D 角色 + 3D 竞技场 | 45度俯视角
 -- ============================================================================
 
 local Config = require("Config")
@@ -17,6 +17,8 @@ local GameUI = require("GameUI")
 local scene_ = nil
 ---@type Node
 local cameraNode_ = nil
+---@type Camera
+local camera_ = nil
 
 --- 角色数据列表
 ---@type table[]
@@ -36,11 +38,11 @@ function Start()
     CreateScene()
     SetupCamera()
     Arena.Create(scene_)
-    characters_ = Character.SpawnTeams(scene_)
-    GameUI.CreateHUD(ResetGame)
+    characters_ = Character.SpawnTeams()
+    GameUI.CreateHUD(characters_, ResetGame)
     SubscribeToEvent("Update", "HandleUpdate")
 
-    print("=== 3D Arena Battle Started ===")
+    print("=== 3D Arena Battle Started (Spine) ===")
     print("Red Team vs Blue Team, " .. Config.TeamSize .. " vs " .. Config.TeamSize)
 end
 
@@ -68,12 +70,12 @@ function SetupCamera()
     cameraNode_.position = Vector3(0, Config.CameraHeight, -Config.CameraDistance)
     cameraNode_.rotation = Quaternion(55, 0, 0)
 
-    local camera = cameraNode_:CreateComponent("Camera")
-    camera.nearClip = 0.5
-    camera.farClip = 200.0
-    camera.fov = Config.CameraFOV
+    camera_ = cameraNode_:CreateComponent("Camera")
+    camera_.nearClip = 0.5
+    camera_.farClip = 200.0
+    camera_.fov = Config.CameraFOV
 
-    local viewport = Viewport:new(scene_, camera)
+    local viewport = Viewport:new(scene_, camera_)
     renderer:SetViewport(0, viewport)
     renderer.hdrRendering = true
 end
@@ -101,6 +103,9 @@ function UpdateGameLogic(dt)
         end
     end
 
+    -- 更新 Spine 角色屏幕位置
+    GameUI.UpdateSpinePositions(characters_, camera_)
+
     -- 更新UI计数
     GameUI.UpdateCounts(redAlive, blueAlive)
 
@@ -118,18 +123,16 @@ end
 
 --- 重置游戏
 function ResetGame()
-    -- 清除旧角色
-    for _, char in ipairs(characters_) do
-        if char.node ~= nil then
-            char.node:Remove()
-        end
-    end
+    -- 清除旧 Spine 控件
+    GameUI.ClearSpines(characters_)
     characters_ = {}
 
     -- 重新生成
-    characters_ = Character.SpawnTeams(scene_)
+    characters_ = Character.SpawnTeams()
     gameState_ = "playing"
-    GameUI.ResetStatus()
+
+    -- 重建 UI
+    GameUI.RebuildHUD(characters_, ResetGame)
     print("=== Game Reset ===")
 end
 
