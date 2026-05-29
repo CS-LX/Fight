@@ -85,18 +85,28 @@ function BTNodePalette.Create(props)
         end
     end
 
-    -- 外层可滚动容器（固定宽度，不被 flex 拉伸）
+    -- 外层固定容器（定位 + 背景），内层 ScrollView 负责滚动
+    local paletteWidth = props.width or 180
     local palette = UI.Panel {
-        width = props.width or 180,
-        maxWidth = props.width or 180,
-        minWidth = props.width or 180,
+        width = paletteWidth,
+        maxWidth = paletteWidth,
+        minWidth = paletteWidth,
         flexShrink = 0,
         height = "100%",
         backgroundColor = { 35, 35, 40, 240 },
-        padding = 10,
-        overflow = "scroll",
         flexDirection = "column",
-        children = children,
+        overflow = "hidden",
+        children = {
+            UI.ScrollView {
+                scrollY = true,
+                bounces = false,
+                flexGrow = 1,
+                flexShrink = 1,
+                padding = 10,
+                flexDirection = "column",
+                children = children,
+            }
+        },
     }
 
     return palette
