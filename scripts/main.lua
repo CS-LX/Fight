@@ -42,6 +42,10 @@ local deployedUnits_ = {}
 --- 部署删除距离阈值（米）
 local DEPLOY_REMOVE_DIST = 1.5
 
+--- 战斗开始时双方初始总HP（用于渐变条比例计算）
+local redInitialHP_ = 0
+local blueInitialHP_ = 0
+
 --- 角色默认碰撞半径（米），用于行动时互相排斥（当角色未配置时的 fallback）
 local CHAR_COLLISION_RADIUS_DEFAULT = 0.4
 
@@ -317,6 +321,11 @@ function TestBattleFromMaker(moduleId)
     table.insert(characters_, blueChar)
 
     gameState_ = "playing"
+
+    -- 记录双方初始总HP
+    redInitialHP_ = redChar.hp or 0
+    blueInitialHP_ = blueChar.hp or 0
+
     -- CreateBattleHUD 内部会调用 CharRender.CreateSpines 重建 Spine 层
     GameUI.CreateBattleHUD(characters_, function()
         -- 战斗结束后回到部署
@@ -336,6 +345,17 @@ function StartBattleFromDeployment()
     -- 关闭部署 UI
     DeploymentEditor.Close()
     gameState_ = "playing"
+
+    -- 记录双方初始总HP
+    redInitialHP_ = 0
+    blueInitialHP_ = 0
+    for _, char in ipairs(characters_) do
+        if char.team == "red" then
+            redInitialHP_ = redInitialHP_ + (char.hp or 0)
+        else
+            blueInitialHP_ = blueInitialHP_ + (char.hp or 0)
+        end
+    end
 
     -- 重建完整 HUD（CharRender 已有角色 spine，需要重新包装到游戏 HUD）
     GameUI.CreateBattleHUD(characters_, ResetGame)
@@ -360,6 +380,8 @@ function UpdateGameLogic(dt)
 
     local redAlive = 0
     local blueAlive = 0
+    local redTotalHP = 0
+    local blueTotalHP = 0
 
     -- 逻辑层更新：AI决策 + 战斗状态
     for _, char in ipairs(characters_) do
@@ -369,8 +391,10 @@ function UpdateGameLogic(dt)
         if char.state ~= "dead" and char.state ~= "dying" then
             if char.team == "red" then
                 redAlive = redAlive + 1
+                redTotalHP = redTotalHP + (char.hp or 0)
             else
                 blueAlive = blueAlive + 1
+                blueTotalHP = blueTotalHP + (char.hp or 0)
             end
         end
     end
@@ -415,6 +439,10 @@ function UpdateGameLogic(dt)
 
     -- HUD 更新
     GameUI.UpdateCounts(redAlive, blueAlive)
+    -- 传入HP系数（当前HP/初始HP）
+    local redRatio = redInitialHP_ > 0 and (redTotalHP / redInitialHP_) or 0
+    local blueRatio = blueInitialHP_ > 0 and (blueTotalHP / blueInitialHP_) or 0
+    GameUI.UpdateHPRatio(redRatio, blueRatio)
 
     -- 胜负判定
     if redAlive == 0 then

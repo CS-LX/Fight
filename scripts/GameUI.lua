@@ -37,6 +37,10 @@ local redCountLabel_ = nil
 local blueCountLabel_ = nil
 ---@type Widget|nil
 local resultOverlay_ = nil
+---@type Widget|nil
+local topBar_ = nil
+---@type Widget|nil
+local gradientBg_ = nil
 
 --- 初始化 UI 系统
 function M.Init()
@@ -110,27 +114,43 @@ function M.CreateBattleHUD(characters, onReset)
         marginRight = 6,
     }
 
+    -- 渐变背景（单一平滑渐变，中点通过颜色插值移动）
+    gradientBg_ = UI.Panel {
+        position = "absolute",
+        top = 0, left = 0, right = 0, bottom = 0,
+        bgColor = { 0, 0, 0, 0 },
+        backgroundGradient = { type = "linear", direction = "to-right", from = { 200, 50, 50, 240 }, to = { 40, 80, 210, 240 } },
+    }
+
     local topBar = UI.Panel {
         position = "absolute",
         top = 0, left = 0, right = 0,
         height = 48,
-        flexDirection = "row",
-        justifyContent = "center",
-        alignItems = "center",
-        gap = 12,
-        bgColor = COLORS.headerBg,
         shadowBlur = 6,
         shadowColor = COLORS.shadow,
         children = {
-            redDot,
-            redCountLabel_,
-            UI.Panel { width = 20 },  -- spacer
-            statusLabel_,
-            UI.Panel { width = 20 },  -- spacer
-            blueCountLabel_,
-            blueDot,
+            gradientBg_,
+            -- 前景层：文字内容
+            UI.Panel {
+                position = "absolute",
+                top = 0, left = 0, right = 0, bottom = 0,
+                flexDirection = "row",
+                justifyContent = "center",
+                alignItems = "center",
+                gap = 12,
+                children = {
+                    redDot,
+                    redCountLabel_,
+                    UI.Panel { width = 20 },
+                    statusLabel_,
+                    UI.Panel { width = 20 },
+                    blueCountLabel_,
+                    blueDot,
+                }
+            },
         }
     }
+    topBar_ = topBar
 
     -- === 底部重新部署按钮 ===
     local resetBtn = UI.Button {
@@ -200,6 +220,48 @@ function M.UpdateCounts(redAlive, blueAlive)
     if blueCountLabel_ then
         blueCountLabel_:SetText(tostring(blueAlive))
     end
+end
+
+-- 渐变端点颜色
+local RED_COLOR = { 200, 50, 50, 240 }
+local BLUE_COLOR = { 40, 80, 210, 240 }
+
+--- 颜色插值
+local function lerpColor(a, b, t)
+    return {
+        math.floor(a[1] + (b[1] - a[1]) * t),
+        math.floor(a[2] + (b[2] - a[2]) * t),
+        math.floor(a[3] + (b[3] - a[3]) * t),
+        math.floor(a[4] + (b[4] - a[4]) * t),
+    }
+end
+
+--- 更新血量比例渐变（平滑移动渐变中点）
+--- redRatio/blueRatio: 各队当前HP / 初始HP (0~1)
+---@param redRatio number 红方HP系数 (currentHP/initialHP)
+---@param blueRatio number 蓝方HP系数 (currentHP/initialHP)
+function M.UpdateHPRatio(redRatio, blueRatio)
+    if not gradientBg_ then return end
+    -- shift: >0 红方优势，<0 蓝方优势（范围约 -1~1）
+    local sum = redRatio + blueRatio
+    if sum <= 0 then return end
+    local shift = (redRatio - blueRatio) / sum  -- -1 ~ 1
+
+    -- 通过插值 from/to 颜色模拟中点偏移
+    -- shift > 0 (红优): from 保持红，to 向红偏移 → 红色占比增大
+    -- shift < 0 (蓝优): from 向蓝偏移，to 保持蓝 → 蓝色占比增大
+    local fromColor, toColor
+    if shift >= 0 then
+        fromColor = RED_COLOR
+        toColor = lerpColor(BLUE_COLOR, RED_COLOR, shift * 0.6)
+    else
+        fromColor = lerpColor(RED_COLOR, BLUE_COLOR, (-shift) * 0.6)
+        toColor = BLUE_COLOR
+    end
+
+    gradientBg_:SetStyle({
+        backgroundGradient = { type = "linear", direction = "to-right", from = fromColor, to = toColor }
+    })
 end
 
 --- 显示胜利信息（大字居中 + 遮罩渐显）

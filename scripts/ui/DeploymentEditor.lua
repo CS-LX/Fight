@@ -264,17 +264,14 @@ function M.Open(opts)
 
     -- === 顶部标题栏 ===
     local header = UI.Panel {
-        width = "100%",
-        height = 44,
         position = "absolute",
-        top = 0,
-        left = 0,
+        top = 0, left = 0, right = 0,
+        height = 48,
         flexDirection = "row",
         justifyContent = "center",
         alignItems = "center",
-        bgColor = COLORS.headerBg,
-        borderColor = { 80, 60, 20, 120 },
-        borderWidth = 0,
+        bgColor = { 0, 0, 0, 0 },
+        backgroundGradient = { type = "linear", direction = "to-right", from = { 180, 40, 40, 240 }, to = { 40, 80, 200, 240 } },
         shadowBlur = 6,
         shadowColor = { 0, 0, 0, 120 },
         children = {
