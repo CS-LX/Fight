@@ -355,4 +355,424 @@ M.Register("Guard", {
     end,
 })
 
+-- ============================================================================
+-- 扩展条件节点
+-- ============================================================================
+
+M.Register("HPBelow50", {
+    category = "condition",
+    label = "血量低于50%",
+    desc = "生命值低于50%",
+    factory = function()
+        return BT.Task:new({
+            run = function(task, ctx)
+                if ctx.char.hp / ctx.char.maxHP < 0.5 then
+                    task:success()
+                else
+                    task:fail()
+                end
+            end,
+        })
+    end,
+})
+
+M.Register("EnemyHPLow", {
+    category = "condition",
+    label = "敌人血量低",
+    desc = "当前目标血量低于30%",
+    factory = function()
+        return BT.Task:new({
+            run = function(task, ctx)
+                if ctx.enemy and ctx.enemy.hp / ctx.enemy.maxHP < 0.3 then
+                    task:success()
+                else
+                    task:fail()
+                end
+            end,
+        })
+    end,
+})
+
+M.Register("EnemyClose", {
+    category = "condition",
+    label = "敌人过近",
+    desc = "敌人距离小于1.5米（贴脸）",
+    factory = function()
+        return BT.Task:new({
+            run = function(task, ctx)
+                if ctx.enemy and ctx.enemyDist < 1.5 then
+                    task:success()
+                else
+                    task:fail()
+                end
+            end,
+        })
+    end,
+})
+
+M.Register("EnemyFar", {
+    category = "condition",
+    label = "敌人较远",
+    desc = "敌人距离大于4米",
+    factory = function()
+        return BT.Task:new({
+            run = function(task, ctx)
+                if ctx.enemy and ctx.enemyDist > 4.0 then
+                    task:success()
+                else
+                    task:fail()
+                end
+            end,
+        })
+    end,
+})
+
+M.Register("CooldownReady", {
+    category = "condition",
+    label = "冷却就绪",
+    desc = "攻击冷却已结束",
+    factory = function()
+        return BT.Task:new({
+            run = function(task, ctx)
+                if ctx.char.attackCooldown <= 0 then
+                    task:success()
+                else
+                    task:fail()
+                end
+            end,
+        })
+    end,
+})
+
+M.Register("IsOutnumbered", {
+    category = "condition",
+    label = "以少敌多",
+    desc = "周围3米内敌人数 > 友军数",
+    factory = function()
+        return BT.Task:new({
+            run = function(task, ctx)
+                local char = ctx.char
+                local enemies, allies = 0, 0
+                for _, c in ipairs(ctx.characters) do
+                    if c ~= char and c.state ~= "dead" and c.state ~= "dying" then
+                        local dx = c.worldPos.x - char.worldPos.x
+                        local dz = c.worldPos.z - char.worldPos.z
+                        if math.sqrt(dx * dx + dz * dz) < 3.0 then
+                            if c.team == char.team then
+                                allies = allies + 1
+                            else
+                                enemies = enemies + 1
+                            end
+                        end
+                    end
+                end
+                if enemies > allies then task:success() else task:fail() end
+            end,
+        })
+    end,
+})
+
+M.Register("HasAllyInRange", {
+    category = "condition",
+    label = "友军在范围内",
+    desc = "3米内有友方存活单位",
+    factory = function()
+        return BT.Task:new({
+            run = function(task, ctx)
+                local char = ctx.char
+                for _, c in ipairs(ctx.characters) do
+                    if c ~= char and c.team == char.team and c.state ~= "dead" and c.state ~= "dying" then
+                        local dx = c.worldPos.x - char.worldPos.x
+                        local dz = c.worldPos.z - char.worldPos.z
+                        if math.sqrt(dx * dx + dz * dz) < 3.0 then
+                            task:success()
+                            return
+                        end
+                    end
+                end
+                task:fail()
+            end,
+        })
+    end,
+})
+
+-- ============================================================================
+-- 扩展动作节点
+-- ============================================================================
+
+--- 寻找血量最低的敌人作为目标
+M.Register("FindWeakestEnemy", {
+    category = "action",
+    label = "锁定最弱敌人",
+    desc = "选择血量百分比最低的敌人作为目标",
+    factory = function()
+        return BT.Task:new({
+            run = function(task, ctx)
+                local weakest = nil
+                local lowestRatio = math.huge
+                for _, c in ipairs(ctx.characters) do
+                    if c.team ~= ctx.char.team and c.state ~= "dead" and c.state ~= "dying" then
+                        local ratio = c.hp / c.maxHP
+                        if ratio < lowestRatio then
+                            lowestRatio = ratio
+                            weakest = c
+                        end
+                    end
+                end
+                if weakest then
+                    ctx.enemy = weakest
+                    local dx = weakest.worldPos.x - ctx.char.worldPos.x
+                    local dz = weakest.worldPos.z - ctx.char.worldPos.z
+                    ctx.enemyDist = math.sqrt(dx * dx + dz * dz)
+                    task:success()
+                else
+                    task:fail()
+                end
+            end,
+        })
+    end,
+})
+
+--- 环绕走位（绕目标侧移）
+M.Register("Strafe", {
+    category = "action",
+    label = "环绕走位",
+    desc = "围绕目标横向移动（保持距离）",
+    factory = function()
+        return BT.Task:new({
+            start = function(task, ctx)
+                -- 随机选择顺时针或逆时针
+                task.direction = (math.random() > 0.5) and 1 or -1
+                task.timer = 0
+                task.duration = 0.8 + math.random() * 0.6  -- 0.8~1.4秒
+            end,
+            run = function(task, ctx)
+                local char = ctx.char
+                local enemy = ctx.enemy
+                if not enemy then task:fail() return end
+
+                task.timer = task.timer + ctx.dt
+                if task.timer >= task.duration then
+                    task:success()
+                    return
+                end
+
+                local dx = enemy.worldPos.x - char.worldPos.x
+                local dz = enemy.worldPos.z - char.worldPos.z
+                local dist = math.sqrt(dx * dx + dz * dz)
+                if dist < 0.01 then task:success() return end
+
+                -- 垂直于朝向敌人方向的移动
+                local perpX = -dz / dist * task.direction
+                local perpZ = dx / dist * task.direction
+                local speed = char.speed * (ctx.profileParams and ctx.profileParams.chaseSpeedMul or 1.0) * 0.7
+                local newX = char.worldPos.x + perpX * speed * ctx.dt
+                local newZ = char.worldPos.z + perpZ * speed * ctx.dt
+                char.worldPos = ClampToArena(Vector3(newX, char.worldPos.y, newZ))
+                char.facingRight = (dx > 0)
+                char.state = "moving"
+                char.animState = "move"
+                task:running()
+            end,
+        })
+    end,
+})
+
+--- 后撤拉开距离（比 Flee 更短促，只退一点）
+M.Register("Retreat", {
+    category = "action",
+    label = "后撤",
+    desc = "短距离后退拉开距离（约1.5米）",
+    factory = function()
+        return BT.Task:new({
+            start = function(task)
+                task.retreated = 0
+            end,
+            run = function(task, ctx)
+                local char = ctx.char
+                local enemy = ctx.enemy
+                if not enemy then task:fail() return end
+
+                if task.retreated >= 1.5 then
+                    task:success()
+                    return
+                end
+
+                local dx = char.worldPos.x - enemy.worldPos.x
+                local dz = char.worldPos.z - enemy.worldPos.z
+                local dist = math.sqrt(dx * dx + dz * dz)
+                if dist < 0.01 then dist = 0.01 end
+
+                local speed = char.speed * 1.2
+                local step = speed * ctx.dt
+                local newX = char.worldPos.x + (dx / dist) * step
+                local newZ = char.worldPos.z + (dz / dist) * step
+                char.worldPos = ClampToArena(Vector3(newX, char.worldPos.y, newZ))
+                char.facingRight = (dx < 0)  -- 面朝敌人后退
+                char.state = "moving"
+                char.animState = "move"
+                task.retreated = task.retreated + step
+                task:running()
+            end,
+        })
+    end,
+})
+
+--- 冲刺突进（快速冲向目标，速度x2）
+M.Register("Dash", {
+    category = "action",
+    label = "冲刺突进",
+    desc = "以2倍速冲向目标（持续0.4秒）",
+    factory = function()
+        return BT.Task:new({
+            start = function(task)
+                task.timer = 0
+            end,
+            run = function(task, ctx)
+                local char = ctx.char
+                local enemy = ctx.enemy
+                if not enemy then task:fail() return end
+
+                task.timer = task.timer + ctx.dt
+                if task.timer >= 0.4 then
+                    task:success()
+                    return
+                end
+
+                local dx = enemy.worldPos.x - char.worldPos.x
+                local dz = enemy.worldPos.z - char.worldPos.z
+                local dist = math.sqrt(dx * dx + dz * dz)
+                if dist < 0.3 then task:success() return end
+
+                local invDist = 1.0 / dist
+                local speed = char.speed * 2.0  -- 2倍速冲刺
+                local newX = char.worldPos.x + dx * invDist * speed * ctx.dt
+                local newZ = char.worldPos.z + dz * invDist * speed * ctx.dt
+                char.worldPos = ClampToArena(Vector3(newX, char.worldPos.y, newZ))
+                char.facingRight = (dx > 0)
+                char.state = "moving"
+                char.animState = "move"
+                task:running()
+            end,
+        })
+    end,
+})
+
+--- 集结：向最近友军移动
+M.Register("Rally", {
+    category = "action",
+    label = "集结",
+    desc = "向最近友军靠拢（抱团）",
+    factory = function()
+        return BT.Task:new({
+            run = function(task, ctx)
+                local char = ctx.char
+                local nearestAlly = nil
+                local nearestDist = math.huge
+                for _, c in ipairs(ctx.characters) do
+                    if c ~= char and c.team == char.team and c.state ~= "dead" and c.state ~= "dying" then
+                        local dx = c.worldPos.x - char.worldPos.x
+                        local dz = c.worldPos.z - char.worldPos.z
+                        local d = math.sqrt(dx * dx + dz * dz)
+                        if d < nearestDist then
+                            nearestDist = d
+                            nearestAlly = c
+                        end
+                    end
+                end
+                if not nearestAlly or nearestDist < 1.0 then
+                    char.state = "idle"
+                    char.animState = "idle"
+                    task:success()
+                    return
+                end
+
+                local dx = nearestAlly.worldPos.x - char.worldPos.x
+                local dz = nearestAlly.worldPos.z - char.worldPos.z
+                local dist = nearestDist
+                local speed = char.speed * (ctx.profileParams and ctx.profileParams.chaseSpeedMul or 1.0)
+                local newX = char.worldPos.x + (dx / dist) * speed * ctx.dt
+                local newZ = char.worldPos.z + (dz / dist) * speed * ctx.dt
+                char.worldPos = ClampToArena(Vector3(newX, char.worldPos.y, newZ))
+                char.facingRight = (dx > 0)
+                char.state = "moving"
+                char.animState = "move"
+                task:running()
+            end,
+        })
+    end,
+})
+
+--- 等待一段随机时间（用于模拟犹豫/停顿）
+M.Register("Wait", {
+    category = "action",
+    label = "等待",
+    desc = "原地等待0.5~1.5秒",
+    factory = function()
+        return BT.Task:new({
+            start = function(task)
+                task.timer = 0
+                task.duration = 0.5 + math.random() * 1.0
+            end,
+            run = function(task, ctx)
+                task.timer = task.timer + ctx.dt
+                ctx.char.state = "idle"
+                ctx.char.animState = "idle"
+                if task.timer >= task.duration then
+                    task:success()
+                else
+                    task:running()
+                end
+            end,
+        })
+    end,
+})
+
+--- 追击最弱目标（FindWeakestEnemy + Chase 组合简写）
+M.Register("ChaseWeakest", {
+    category = "action",
+    label = "追击最弱",
+    desc = "锁定血量最低的敌人并追击",
+    factory = function()
+        return BT.Task:new({
+            run = function(task, ctx)
+                -- 找到最弱敌人
+                local weakest = nil
+                local lowestRatio = math.huge
+                for _, c in ipairs(ctx.characters) do
+                    if c.team ~= ctx.char.team and c.state ~= "dead" and c.state ~= "dying" then
+                        local ratio = c.hp / c.maxHP
+                        if ratio < lowestRatio then
+                            lowestRatio = ratio
+                            weakest = c
+                        end
+                    end
+                end
+                if not weakest then task:fail() return end
+
+                local char = ctx.char
+                local dx = weakest.worldPos.x - char.worldPos.x
+                local dz = weakest.worldPos.z - char.worldPos.z
+                local dist = math.sqrt(dx * dx + dz * dz)
+
+                ctx.enemy = weakest
+                ctx.enemyDist = dist
+
+                local stopDist = char.stopDistance or char.attackRange
+                if dist <= stopDist then task:success() return end
+
+                local invDist = 1.0 / dist
+                local speed = char.speed * (ctx.profileParams and ctx.profileParams.chaseSpeedMul or 1.0)
+                local newX = char.worldPos.x + dx * invDist * speed * ctx.dt
+                local newZ = char.worldPos.z + dz * invDist * speed * ctx.dt
+                char.worldPos = ClampToArena(Vector3(newX, char.worldPos.y, newZ))
+                char.facingRight = (dx > 0)
+                char.state = "moving"
+                char.animState = "move"
+                task:running()
+            end,
+        })
+    end,
+})
+
 return M

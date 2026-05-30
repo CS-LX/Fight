@@ -26,6 +26,140 @@ local DECORATOR_MAP = {
 }
 
 -- ============================================================================
+-- 自定义装饰器（不修改 BT 库，在编译阶段包装子节点）
+-- ============================================================================
+
+--- RepeatN: 重复执行子节点 N 次（全部成功才成功，任意一次失败则失败）
+---@param childBT table 子节点
+---@param count number 重复次数
+local function WrapRepeatN(childBT, count)
+    return BT.Task:new({
+        start = function(task)
+            task._repeatCount = 0
+            task._maxCount = count or 3
+        end,
+        run = function(task, ctx)
+            task._repeatCount = task._repeatCount + 1
+            -- 利用子节点的 run（需要手动驱动）
+            childBT:setControl({
+                success = function()
+                    if task._repeatCount >= task._maxCount then
+                        task:success()
+                    else
+                        task:running()
+                    end
+                end,
+                fail = function()
+                    task:fail()
+                end,
+                running = function()
+                    task:running()
+                end,
+            })
+            childBT:start(ctx)
+            childBT:call_run(ctx)
+        end,
+    })
+end
+
+--- UntilFail: 循环执行子节点直到它失败（失败时返回 success）
+---@param childBT table 子节点
+local function WrapUntilFail(childBT)
+    return BT.Task:new({
+        run = function(task, ctx)
+            childBT:setControl({
+                success = function()
+                    task:running()  -- 子节点成功 → 继续循环
+                end,
+                fail = function()
+                    task:success()  -- 子节点失败 → 本节点成功退出
+                end,
+                running = function()
+                    task:running()
+                end,
+            })
+            childBT:start(ctx)
+            childBT:call_run(ctx)
+        end,
+    })
+end
+
+--- UntilSuccess: 循环执行子节点直到它成功
+---@param childBT table 子节点
+local function WrapUntilSuccess(childBT)
+    return BT.Task:new({
+        run = function(task, ctx)
+            childBT:setControl({
+                success = function()
+                    task:success()
+                end,
+                fail = function()
+                    task:running()  -- 子节点失败 → 继续循环
+                end,
+                running = function()
+                    task:running()
+                end,
+            })
+            childBT:start(ctx)
+            childBT:call_run(ctx)
+        end,
+    })
+end
+
+--- Cooldown: 子节点执行成功后进入冷却期，冷却期间直接失败
+---@param childBT table 子节点
+---@param cooldownTime number 冷却时间(秒)
+local function WrapCooldown(childBT, cooldownTime)
+    return BT.Task:new({
+        start = function(task)
+            task._lastSuccess = -9999
+        end,
+        run = function(task, ctx)
+            local now = (ctx.char and ctx.char._btTime) or 0
+            if now - task._lastSuccess < cooldownTime then
+                task:fail()  -- 冷却中
+                return
+            end
+            childBT:setControl({
+                success = function()
+                    task._lastSuccess = now
+                    task:success()
+                end,
+                fail = function()
+                    task:fail()
+                end,
+                running = function()
+                    task:running()
+                end,
+            })
+            childBT:start(ctx)
+            childBT:call_run(ctx)
+        end,
+    })
+end
+
+--- Probability: 以指定概率执行子节点，否则直接失败
+---@param childBT table 子节点
+---@param chance number 0~1之间的概率
+local function WrapProbability(childBT, chance)
+    return BT.Task:new({
+        run = function(task, ctx)
+            if math.random() > chance then
+                task:fail()  -- 概率未命中
+                return
+            end
+            childBT:setControl({
+                success = function() task:success() end,
+                fail = function() task:fail() end,
+                running = function() task:running() end,
+            })
+            childBT:start(ctx)
+            childBT:call_run(ctx)
+        end,
+    })
+end
+
+-- ============================================================================
 -- 编译主函数
 -- ============================================================================
 
@@ -136,6 +270,50 @@ function M._CompileNode(nodeId, nodes, childrenOf)
             return nil, err
         end
         return decoratorClass:new({ node = childBT }), nil
+    end
+
+    -- 自定义装饰器（带参数的包装节点）
+    if nodeType == "RepeatN" then
+        local childList = childrenOf[nodeId] or {}
+        if #childList == 0 then return nil, "RepeatN has no child: " .. nodeId end
+        local childBT, err = M._CompileNode(childList[1].id, nodes, childrenOf)
+        if not childBT then return nil, err end
+        local count = nodeData.count or 3
+        return WrapRepeatN(childBT, count), nil
+    end
+
+    if nodeType == "UntilFail" then
+        local childList = childrenOf[nodeId] or {}
+        if #childList == 0 then return nil, "UntilFail has no child: " .. nodeId end
+        local childBT, err = M._CompileNode(childList[1].id, nodes, childrenOf)
+        if not childBT then return nil, err end
+        return WrapUntilFail(childBT), nil
+    end
+
+    if nodeType == "UntilSuccess" then
+        local childList = childrenOf[nodeId] or {}
+        if #childList == 0 then return nil, "UntilSuccess has no child: " .. nodeId end
+        local childBT, err = M._CompileNode(childList[1].id, nodes, childrenOf)
+        if not childBT then return nil, err end
+        return WrapUntilSuccess(childBT), nil
+    end
+
+    if nodeType == "Cooldown" then
+        local childList = childrenOf[nodeId] or {}
+        if #childList == 0 then return nil, "Cooldown has no child: " .. nodeId end
+        local childBT, err = M._CompileNode(childList[1].id, nodes, childrenOf)
+        if not childBT then return nil, err end
+        local cooldownTime = nodeData.cooldownTime or 2.0
+        return WrapCooldown(childBT, cooldownTime), nil
+    end
+
+    if nodeType == "Probability" then
+        local childList = childrenOf[nodeId] or {}
+        if #childList == 0 then return nil, "Probability has no child: " .. nodeId end
+        local childBT, err = M._CompileNode(childList[1].id, nodes, childrenOf)
+        if not childBT then return nil, err end
+        local chance = nodeData.chance or 0.5
+        return WrapProbability(childBT, chance), nil
     end
 
     return nil, "unknown node type: " .. tostring(nodeType)

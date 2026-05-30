@@ -274,6 +274,9 @@ function M.Update(char, characters, dt)
     -- 更新攻击冷却
     char.attackCooldown = math.max(0, char.attackCooldown - dt)
 
+    -- 累计行为树时间（供 Cooldown 装饰器使用）
+    char._btTime = (char._btTime or 0) + dt
+
     -- 攻击动画锁定期间跳过行为树（受击不阻止反击，仅攻击动作需锁定）
     if char.animTimer and char.animTimer > 0 and char.animState == "attack" then return end
 
