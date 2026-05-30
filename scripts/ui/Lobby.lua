@@ -8,6 +8,7 @@
 local UI = require("urhox-libs/UI")
 local Economy = require("economy.Economy")
 local Ranked = require("economy.Ranked")
+local LLMClient = require("network.Client")
 
 local M = {}
 
@@ -222,6 +223,44 @@ function M.BuildUI()
         },
     }
 
+    -- LLM AI 开关（toggle）
+    local llmToggle = UI.Panel {
+        width = "100%",
+        flexDirection = "row",
+        alignItems = "center",
+        justifyContent = "center",
+        marginBottom = 14,
+        gap = 10,
+        children = {
+            UI.Label {
+                text = "AI 模式:",
+                fontSize = 10,
+                fontColor = COLORS.textMuted,
+            },
+            UI.Button {
+                text = LLMClient.IsEnabled() and "LLM 大模型" or "本地阵型AI",
+                width = 130,
+                height = 28,
+                backgroundColor = LLMClient.IsEnabled() and COLORS.secondary or COLORS.surface,
+                borderWidth = 1,
+                borderColor = LLMClient.IsEnabled() and COLORS.secondary or COLORS.border,
+                onClick = function(self)
+                    local newState = not LLMClient.IsEnabled()
+                    LLMClient.SetEnabled(newState)
+                    -- 重建 UI 刷新按钮状态
+                    M.BuildUI()
+                end,
+            },
+            LLMClient.IsEnabled() and UI.Label {
+                text = LLMClient.IsConnected() and "已连接" or "未连接服务端",
+                fontSize = 8,
+                fontColor = LLMClient.IsConnected()
+                    and { 80, 200, 120, 255 }
+                    or COLORS.redText,
+            } or nil,
+        },
+    }
+
     -- 模式卡片1：AI 对战
     local battleCard = M.CreateModeCard({
         title = "AI 对战",
@@ -404,6 +443,8 @@ function M.BuildUI()
                 paddingBottom = 20,
                 children = {
                     title,
+                    -- LLM AI 开关
+                    llmToggle,
                     -- 卡片行（3 张卡片）
                     UI.Panel {
                         flexDirection = "row",

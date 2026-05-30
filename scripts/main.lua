@@ -18,8 +18,10 @@ local CharacterMaker = require("ui.CharacterMaker")
 local Workshop = require("ui.Workshop")
 local Lobby = require("ui.Lobby")
 local Economy = require("economy.Economy")
+local AIDeployer = require("logic.AIDeployer")
 local Ranked = require("economy.Ranked")
 local SponsorPool = require("economy.SponsorPool")
+local LLMClient = require("network.Client")
 
 -- ============================================================================
 -- 全局状态
@@ -73,6 +75,14 @@ local sandboxMode_ = false
 -- ============================================================================
 
 function Start()
+    -- 服务端模式：只启动 LLM 代理，不运行游戏逻辑
+    if IsServerMode and IsServerMode() then
+        local Server = require("network.Server")
+        Server.Start()
+        print("=== TABS Arena - LLM Server Mode ===")
+        return
+    end
+
     graphics.windowTitle = Config.Title
 
     -- 初始化角色注册表（加载预设 + 恢复持久化角色）
@@ -87,6 +97,11 @@ function Start()
     CreateScene()
     SetupCamera()
     Arena.Create(scene_)
+
+    -- 初始化 LLM 客户端通信（如果是多人模式则连接服务端）
+    if IsClientMode and IsClientMode() then
+        LLMClient.Init()
+    end
 
     SubscribeToEvent("Update", "HandleUpdate")
     SubscribeToEvent("MouseButtonDown", "HandleMouseDown")
@@ -185,29 +200,46 @@ function EnterDeployment(ranked)
     -- 创建空 Spine 容器（角色将逐步添加）
     local spineLayer = CharRender.CreateEmptyContainer()
 
-    -- PvAI 模式：预先部署 AI 蓝方角色（让玩家可以看到对手阵容）
-    local aiConfig = ranked and Ranked.GetAIConfig() or { teamSize = math.random(3, 5), statMultiplier = 1.0 }
-    local allDefs = CharRegistry.GetAllIds()
-    if #allDefs == 0 then allDefs = { "doro" } end
-
-    local halfW = Config.ArenaWidth * 0.5 - 2
-    for i = 1, aiConfig.teamSize do
-        local defId = allDefs[math.random(1, #allDefs)]
-        local x = math.random() * halfW + 1
-        local z = (math.random() - 0.5) * Config.ArenaDepth * 0.8
-        local char = CharLogic.Create(defId, "blue", Vector3(x, 0, z))
-        if ranked then
-            char.hp = math.floor((char.hp or 100) * aiConfig.statMultiplier)
-            char.maxHp = char.hp
-            char.atk = math.floor((char.atk or 10) * aiConfig.statMultiplier)
+    -- PvAI 模式：部署 AI 蓝方角色
+    if LLMClient.IsEnabled() then
+        -- LLM 模式：向服务端请求 LLM 决策（异步，先显示等待提示）
+        local aiConfig = ranked and Ranked.GetAIConfig() or { teamSize = math.random(3, 5), statMultiplier = 1.0 }
+        local gameState = AIDeployer.BuildLLMGameState("blue", aiConfig.teamSize, Economy.GetBalance())
+        LLMClient.RequestDeploy(gameState, function(success, result)
+            if success and type(result) == "table" then
+                -- LLM 返回部署方案，创建角色
+                local llmChars = AIDeployer.ApplyLLMPlan(result, "blue", aiConfig.statMultiplier)
+                for _, char in ipairs(llmChars) do
+                    table.insert(characters_, char)
+                    CharRender.AddOne(char)
+                end
+                UpdateDeployCounts()
+                print(string.format("[Deploy] LLM blue deployed %d units", #llmChars))
+            else
+                -- LLM 失败，回退到本地 AI
+                print("[Deploy] LLM failed: " .. tostring(result) .. ", fallback to local AI")
+                local fallbackChars = AIDeployer.DeployTeam("blue", aiConfig.teamSize, nil, aiConfig.statMultiplier)
+                for _, char in ipairs(fallbackChars) do
+                    table.insert(characters_, char)
+                    CharRender.AddOne(char)
+                end
+                UpdateDeployCounts()
+            end
+        end)
+        print("[Deploy] Requesting LLM deployment...")
+    else
+        -- 本地 AI 模式：阵型 + 角色搭配
+        local aiConfig = ranked and Ranked.GetAIConfig() or { teamSize = math.random(3, 5), statMultiplier = 1.0 }
+        local aiChars = AIDeployer.DeployTeam("blue", aiConfig.teamSize, nil, aiConfig.statMultiplier)
+        for _, char in ipairs(aiChars) do
+            table.insert(characters_, char)
         end
-        table.insert(characters_, char)
+        -- 渲染 AI 角色
+        for _, char in ipairs(characters_) do
+            CharRender.AddOne(char)
+        end
+        print(string.format("[Deploy] AI blue pre-deployed %d units", aiConfig.teamSize))
     end
-    -- 渲染 AI 角色（逐个添加到已有容器，不能用 CreateSpines 因为它会覆盖容器）
-    for _, char in ipairs(characters_) do
-        CharRender.AddOne(char)
-    end
-    print(string.format("[Deploy] AI blue pre-deployed %d units", aiConfig.teamSize))
 
     -- 打开部署 UI（spineLayer 作为底层传入）
     DeploymentEditor.Open({
@@ -718,37 +750,21 @@ function EnterSpectateSetup()
     gameState_ = "spectating"
     spectateState_ = { betAmount = 0, betTeam = "red" }
 
-    -- 自动生成两支AI队伍进行对战
+    -- 智能生成均衡的两支AI队伍（阵型 + 实力均衡）
     CharRender.Clear(characters_)
     ProjectileRender.Clear()
     AI.Clear()
     characters_ = {}
 
-    -- 获取所有可用角色定义
-    local allDefs = CharRegistry.GetAllIds()
-    if #allDefs == 0 then
-        allDefs = { "doro" }
-    end
+    -- 使用智能部署系统生成均衡双方（LLM 模式下同样先用本地 AI 生成，后续可扩展）
+    local redChars, blueChars = AIDeployer.DeploySpectateBalanced()
+    local redCount = #redChars
+    local blueCount = #blueChars
 
-    -- 随机生成红蓝双方各 3~5 个角色
-    local redCount = math.random(3, 5)
-    local blueCount = math.random(3, 5)
-
-    local halfW = Config.ArenaWidth * 0.5 - 2
-    local halfD = Config.ArenaDepth * 0.5 - 1
-
-    for i = 1, redCount do
-        local defId = allDefs[math.random(1, #allDefs)]
-        local x = -math.random() * halfW - 1
-        local z = (math.random() - 0.5) * Config.ArenaDepth * 0.8
-        local char = CharLogic.Create(defId, "red", Vector3(x, 0, z))
+    for _, char in ipairs(redChars) do
         table.insert(characters_, char)
     end
-    for i = 1, blueCount do
-        local defId = allDefs[math.random(1, #allDefs)]
-        local x = math.random() * halfW + 1
-        local z = (math.random() - 0.5) * Config.ArenaDepth * 0.8
-        local char = CharLogic.Create(defId, "blue", Vector3(x, 0, z))
+    for _, char in ipairs(blueChars) do
         table.insert(characters_, char)
     end
 
