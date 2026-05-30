@@ -15,6 +15,10 @@ local ProjectileRender = require("render.ProjectileRender")
 local GameUI = require("GameUI")
 local DeploymentEditor = require("ui.DeploymentEditor")
 local CharacterMaker = require("ui.CharacterMaker")
+local Lobby = require("ui.Lobby")
+local Economy = require("economy.Economy")
+local Ranked = require("economy.Ranked")
+local SponsorPool = require("economy.SponsorPool")
 
 -- ============================================================================
 -- 全局状态
@@ -30,8 +34,8 @@ local camera_ = nil
 ---@type table[]
 local characters_ = {}
 
---- 游戏状态 "deployment" | "playing" | "redWin" | "blueWin"
-local gameState_ = "deployment"
+--- 游戏状态 "lobby" | "deployment" | "playing" | "redWin" | "blueWin" | "spectating"
+local gameState_ = "lobby"
 
 --- 当前使用的角色定义ID
 local CHAR_DEF_ID = "wisdel"
@@ -50,6 +54,16 @@ local blueInitialHP_ = 0
 --- 角色默认碰撞半径（米），用于行动时互相排斥（当角色未配置时的 fallback）
 local CHAR_COLLISION_RADIUS_DEFAULT = 0.4
 
+--- 赞助观战中的状态
+---@type {betAmount: number, betTeam: string}|nil
+local spectateState_ = nil
+
+--- 是否排位对战模式
+local isRankedBattle_ = false
+
+--- 上次战斗的部署费用（结算时显示）
+local lastDeployCost_ = 0
+
 -- ============================================================================
 -- 生命周期
 -- ============================================================================
@@ -60,6 +74,11 @@ function Start()
     -- 初始化角色注册表（加载预设 + 恢复持久化角色）
     CharRegistry.Init()
 
+    -- 初始化经济系统
+    Economy.Init()
+    SponsorPool.Init()
+    Ranked.Init()
+
     GameUI.Init()
     CreateScene()
     SetupCamera()
@@ -69,11 +88,10 @@ function Start()
     SubscribeToEvent("MouseButtonDown", "HandleMouseDown")
     SubscribeToEvent("TouchBegin", "HandleTouchBegin")
 
-    -- 游戏启动直接进入部署阶段（TABS 风格）
-    EnterDeployment()
+    -- 游戏从大厅开始
+    EnterLobby()
 
-    print("=== TABS Arena - Deployment Phase ===")
-    print("Place your units and press START!")
+    print("=== TABS Arena - Lobby ===")
 end
 
 function Stop()
@@ -111,11 +129,11 @@ function SetupCamera()
 end
 
 -- ============================================================================
--- 部署阶段
+-- 大厅阶段
 -- ============================================================================
 
---- 进入部署阶段
-function EnterDeployment()
+--- 进入大厅（游戏主入口）
+function EnterLobby()
     -- 清除旧战斗数据
     CharRender.Clear(characters_)
     ProjectileRender.Clear()
@@ -123,6 +141,41 @@ function EnterDeployment()
     characters_ = {}
     deployedUnits_ = {}
 
+    gameState_ = "lobby"
+
+    isRankedBattle_ = false
+
+    Lobby.Open({
+        onBattle = function()
+            EnterDeployment(false)
+        end,
+        onRanked = function()
+            EnterDeployment(true)
+        end,
+        onSpectate = function()
+            EnterSpectateSetup()
+        end,
+        onMaker = function()
+            OpenCharacterMakerFromLobby()
+        end,
+    })
+end
+
+-- ============================================================================
+-- 部署阶段
+-- ============================================================================
+
+--- 进入部署阶段
+---@param ranked boolean 是否排位模式
+function EnterDeployment(ranked)
+    -- 清除旧战斗数据
+    CharRender.Clear(characters_)
+    ProjectileRender.Clear()
+    AI.Clear()
+    characters_ = {}
+    deployedUnits_ = {}
+
+    isRankedBattle_ = ranked or false
     gameState_ = "deployment"
 
     -- 创建空 Spine 容器（角色将逐步添加）
@@ -298,7 +351,7 @@ function OpenCharacterMaker()
     CharacterMaker.Open({
         onClose = function()
             -- 返回部署阶段（重新打开部署 UI，角色卡列表会刷新）
-            EnterDeployment()
+            EnterDeployment(false)
         end,
         onTestBattle = function(moduleId)
             -- 从制作器发起的测试战斗：放置两个该角色对打
@@ -345,6 +398,57 @@ function StartBattleFromDeployment()
         return
     end
 
+    -- 计算部署费用（新手保护减半）
+    local unitCount = #deployedUnits_
+    local deployCost = Economy.CalcActualDeployCost(unitCount, isRankedBattle_)
+    if not Economy.CanAfford(deployCost) then
+        DeploymentEditor.SetHint("金币不足! 需要 " .. deployCost .. "G (拥有 " .. Economy.GetBalance() .. "G)")
+        return
+    end
+
+    -- 扣除部署费用
+    lastDeployCost_ = deployCost
+    local costLabel = isRankedBattle_ and "排位部署x" or "部署角色x"
+    Economy.Spend(deployCost, costLabel .. unitCount)
+
+    -- 排位模式：根据段位自动补充 AI 敌方角色
+    if isRankedBattle_ then
+        local aiConfig = Ranked.GetAIConfig()
+        local enemyTeam = "blue"
+        -- 检查玩家放了哪些队伍，对面补 AI
+        local playerHasRed = false
+        local playerHasBlue = false
+        for _, u in ipairs(deployedUnits_) do
+            if u.team == "red" then playerHasRed = true end
+            if u.team == "blue" then playerHasBlue = true end
+        end
+        -- 对面补 AI（默认补蓝方，如果玩家全放蓝方则补红方）
+        if playerHasBlue and not playerHasRed then
+            enemyTeam = "red"
+        end
+
+        -- 获取可用角色列表
+        local allDefs = CharRegistry.GetAllIds()
+        if #allDefs == 0 then allDefs = { "doro" } end
+
+        local halfW = Config.ArenaWidth * 0.5 - 2
+        for i = 1, aiConfig.teamSize do
+            local defId = allDefs[math.random(1, #allDefs)]
+            local x = enemyTeam == "blue"
+                and (math.random() * halfW + 1)
+                or (-math.random() * halfW - 1)
+            local z = (math.random() - 0.5) * Config.ArenaDepth * 0.8
+            local char = CharLogic.Create(defId, enemyTeam, Vector3(x, 0, z))
+            -- 应用段位属性倍率
+            char.hp = math.floor((char.hp or 100) * aiConfig.statMultiplier)
+            char.maxHp = char.hp
+            char.atk = math.floor((char.atk or 10) * aiConfig.statMultiplier)
+            table.insert(characters_, char)
+        end
+        print(string.format("[Ranked] AI team: %d units, stat×%.1f (%s)",
+            aiConfig.teamSize, aiConfig.statMultiplier, Ranked.GetTierName()))
+    end
+
     -- 关闭部署 UI
     DeploymentEditor.Close()
     gameState_ = "playing"
@@ -360,10 +464,25 @@ function StartBattleFromDeployment()
         end
     end
 
+    -- 赞助池：开启新一场 + AI 观众投注
+    SponsorPool.BeginMatch()
+    local redStr, blueStr = 0, 0
+    for _, char in ipairs(characters_) do
+        if char.team == "red" then
+            redStr = redStr + (char.hp or 0)
+        else
+            blueStr = blueStr + (char.hp or 0)
+        end
+    end
+    SponsorPool.SimulateAIBets(redStr, blueStr)
+
     -- 重建完整 HUD（CharRender 已有角色 spine，需要重新包装到游戏 HUD）
-    GameUI.CreateBattleHUD(characters_, ResetGame)
+    GameUI.CreateBattleHUD(characters_, function()
+        SettleBattleResult()
+    end)
     GameUI.ResetStatus()
-    print("[Main] Battle started! " .. #deployedUnits_ .. " units deployed")
+    print("[Main] Battle started! " .. #deployedUnits_ .. " units deployed" ..
+        (isRankedBattle_ and " [RANKED]" or ""))
 end
 
 -- ============================================================================
@@ -463,10 +582,265 @@ function UpdateGameLogic(dt)
     end
 end
 
---- 重置游戏 → 回到部署阶段
+-- ============================================================================
+-- 战斗结算（普通 + 排位统一入口）
+-- ============================================================================
+
+--- 战斗结束后统一结算
+function SettleBattleResult()
+    -- 观战模式走独立结算
+    if spectateState_ then
+        SettleSpectateResult()
+        return
+    end
+
+    -- 判断胜负（当前规则：玩家部署了哪方？默认 red 为玩家方）
+    local playerTeam = "red"
+    for _, u in ipairs(deployedUnits_) do
+        if u.team == "blue" then playerTeam = "blue"; break end
+    end
+    -- 如果两边都有，以红方为玩家方
+    local playerHasRed = false
+    for _, u in ipairs(deployedUnits_) do
+        if u.team == "red" then playerHasRed = true; break end
+    end
+    if playerHasRed then playerTeam = "red" end
+
+    local winTeam = gameState_ == "redWin" and "red" or "blue"
+    local playerWon = (winTeam == playerTeam)
+
+    -- 计算敌方数量
+    local enemyCount = 0
+    for _, char in ipairs(characters_) do
+        if char.team ~= playerTeam then
+            enemyCount = enemyCount + 1
+        end
+    end
+
+    -- 赞助池结算：选手从池中获得分成
+    local poolResult = SponsorPool.SettleMatch(winTeam)
+    local fighterBonus = playerWon and poolResult.winnerShare or poolResult.loserShare
+
+    -- 收集结算明细
+    local items = {}
+    table.insert(items, { label = "部署费用", amount = -lastDeployCost_ })
+
+    if isRankedBattle_ then
+        -- 排位结算：积分 + 奖励倍数 + 赞助池分成
+        local scoreChange = Ranked.RecordMatch(playerWon)
+        local reward = Ranked.CalcReward(playerWon, enemyCount)
+        local totalReward = reward + fighterBonus
+        if totalReward > 0 then
+            local label = playerWon
+                and ("排位胜利(" .. winTeam .. ") +" .. scoreChange .. "pt")
+                or ("排位失败安慰")
+            Economy.Earn(totalReward, label)
+        end
+        table.insert(items, { label = "战斗奖励", amount = reward })
+        if fighterBonus > 0 then
+            table.insert(items, { label = "赞助池分成", amount = fighterBonus })
+        end
+        table.insert(items, { label = "段位积分", amount = scoreChange, unit = "pt" })
+        print(string.format("[Ranked] Result: %s, score %+d → %d (%s), reward %dG + pool %dG",
+            playerWon and "WIN" or "LOSE", scoreChange, Ranked.GetScore(),
+            Ranked.GetTierName(), reward, fighterBonus))
+    else
+        -- 普通AI对战结算 + 赞助池分成
+        local reward = Economy.CalcBattleReward(playerWon, enemyCount)
+        local totalReward = reward + fighterBonus
+        if totalReward > 0 then
+            Economy.Earn(totalReward, "对战" .. (playerWon and "胜利" or "失败") .. "(" .. winTeam .. ")")
+        end
+        table.insert(items, { label = "战斗奖励", amount = reward })
+        if fighterBonus > 0 then
+            table.insert(items, { label = "赞助池分成", amount = fighterBonus })
+        end
+    end
+
+    -- 显示结算面板（用户点击后回大厅）
+    local title = playerWon and "VICTORY!" or "DEFEAT"
+    GameUI.ShowSettlement(title, playerWon, items, function()
+        EnterLobby()
+    end)
+end
+
+--- 重置游戏 → 回到大厅
 function ResetGame()
-    EnterDeployment()
-    print("=== Back to Deployment Phase ===")
+    EnterLobby()
+    print("=== Back to Lobby ===")
+end
+
+-- ============================================================================
+-- 赞助观战模式
+-- ============================================================================
+
+--- 进入赞助观战设置（选择押注）
+function EnterSpectateSetup()
+    gameState_ = "spectating"
+    spectateState_ = { betAmount = 0, betTeam = "red" }
+
+    -- 自动生成两支AI队伍进行对战
+    CharRender.Clear(characters_)
+    ProjectileRender.Clear()
+    AI.Clear()
+    characters_ = {}
+
+    -- 获取所有可用角色定义
+    local allDefs = CharRegistry.GetAllIds()
+    if #allDefs == 0 then
+        allDefs = { "doro" }
+    end
+
+    -- 随机生成红蓝双方各 3~5 个角色
+    local redCount = math.random(3, 5)
+    local blueCount = math.random(3, 5)
+
+    local halfW = Config.ArenaWidth * 0.5 - 2
+    local halfD = Config.ArenaDepth * 0.5 - 1
+
+    for i = 1, redCount do
+        local defId = allDefs[math.random(1, #allDefs)]
+        local x = -math.random() * halfW - 1
+        local z = (math.random() - 0.5) * Config.ArenaDepth * 0.8
+        local char = CharLogic.Create(defId, "red", Vector3(x, 0, z))
+        table.insert(characters_, char)
+    end
+    for i = 1, blueCount do
+        local defId = allDefs[math.random(1, #allDefs)]
+        local x = math.random() * halfW + 1
+        local z = (math.random() - 0.5) * Config.ArenaDepth * 0.8
+        local char = CharLogic.Create(defId, "blue", Vector3(x, 0, z))
+        table.insert(characters_, char)
+    end
+
+    -- 记录初始HP
+    redInitialHP_ = 0
+    blueInitialHP_ = 0
+    for _, char in ipairs(characters_) do
+        if char.team == "red" then
+            redInitialHP_ = redInitialHP_ + (char.hp or 0)
+        else
+            blueInitialHP_ = blueInitialHP_ + (char.hp or 0)
+        end
+    end
+
+    -- 显示赞助观战 UI（押注选择 + 战斗HUD）
+    local SpectateUI = require("ui.SpectateUI")
+    SpectateUI.Open({
+        redCount = redCount,
+        blueCount = blueCount,
+        characters = characters_,
+        onConfirmBet = function(betAmount, betTeam)
+            spectateState_.betAmount = betAmount
+            spectateState_.betTeam = betTeam
+            -- 扣除押注金
+            if betAmount > 0 then
+                Economy.Spend(betAmount, "赞助押注(" .. betTeam .. ")")
+            end
+            -- 启动战斗
+            StartSpectatedBattle()
+        end,
+        onSkipBet = function()
+            -- 不押注，直接观战
+            spectateState_.betAmount = 0
+            spectateState_.betTeam = ""
+            StartSpectatedBattle()
+        end,
+        onCancel = function()
+            EnterLobby()
+        end,
+    })
+
+    print("[Main] Spectate setup: " .. redCount .. " vs " .. blueCount)
+end
+
+--- 启动观战战斗
+function StartSpectatedBattle()
+    gameState_ = "playing"
+
+    -- 赞助池：开启新一场，加入玩家押注 + AI 观众投注
+    SponsorPool.BeginMatch()
+    if spectateState_ and spectateState_.betAmount > 0 then
+        SponsorPool.AddBet(spectateState_.betAmount, spectateState_.betTeam, "player")
+    end
+    local redStr, blueStr = 0, 0
+    for _, char in ipairs(characters_) do
+        if char.team == "red" then
+            redStr = redStr + (char.hp or 0)
+        else
+            blueStr = blueStr + (char.hp or 0)
+        end
+    end
+    SponsorPool.SimulateAIBets(redStr, blueStr)
+
+    GameUI.CreateBattleHUD(characters_, function()
+        -- 战斗结束时结算
+        SettleSpectateResult()
+    end)
+    GameUI.ResetStatus()
+    print("[Main] Spectated battle started!")
+end
+
+--- 观战结算（通过赞助池分配奖金）
+function SettleSpectateResult()
+    local winTeam = gameState_ == "redWin" and "red" or "blue"
+    local betAmount = spectateState_ and spectateState_.betAmount or 0
+    local betTeam = spectateState_ and spectateState_.betTeam or ""
+
+    -- 赞助池结算
+    local poolResult = SponsorPool.SettleMatch(winTeam)
+
+    local guessCorrect = (betAmount > 0) and (betTeam == winTeam)
+
+    -- 收集结算明细
+    local items = {}
+    local playerWon = false
+
+    if guessCorrect and poolResult.winBets > 0 then
+        -- 玩家押对：按投注比例获得赞助商分成（返还本金 + 利润）
+        playerWon = true
+        local playerShare = math.floor(poolResult.sponsorPayout * betAmount / poolResult.winBets)
+        local totalReturn = betAmount + playerShare
+        Economy.Earn(totalReturn, "赞助观战-猜对(" .. winTeam .. "胜)")
+        table.insert(items, { label = "押注(" .. betTeam .. "方)", amount = -betAmount })
+        table.insert(items, { label = "返还本金", amount = betAmount })
+        table.insert(items, { label = "赞助池分红", amount = playerShare })
+        print(string.format("[Spectate] Won! bet=%d, share=%d/%d of sponsor %dG, return=%dG",
+            betAmount, betAmount, poolResult.winBets, poolResult.sponsorPayout, totalReturn))
+    elseif betAmount > 0 and not guessCorrect then
+        -- 玩家押错：本金已扣除（lost），仅给参与奖
+        Economy.Earn(Economy.Config.SPECTATE_BASE_REWARD, "观战参与奖")
+        table.insert(items, { label = "押注(" .. betTeam .. "方)", amount = -betAmount })
+        table.insert(items, { label = "参与奖", amount = Economy.Config.SPECTATE_BASE_REWARD })
+        print(string.format("[Spectate] Lost bet=%d on %s, winner=%s", betAmount, betTeam, winTeam))
+    else
+        -- 未押注：仅参与奖
+        Economy.Earn(Economy.Config.SPECTATE_BASE_REWARD, "观战参与奖")
+        table.insert(items, { label = "观战参与奖", amount = Economy.Config.SPECTATE_BASE_REWARD })
+        print("[Spectate] No bet, base reward only")
+    end
+
+    -- 显示结算面板
+    local title = playerWon and "SPONSOR WIN!" or (betAmount > 0 and "SPONSOR LOST" or "SPECTATED")
+    GameUI.ShowSettlement(title, playerWon, items, function()
+        EnterLobby()
+    end)
+end
+
+-- ============================================================================
+-- 角色工坊（从大厅入口）
+-- ============================================================================
+
+--- 从大厅打开角色制作器
+function OpenCharacterMakerFromLobby()
+    CharacterMaker.Open({
+        onClose = function()
+            EnterLobby()
+        end,
+        onTestBattle = function(moduleId)
+            TestBattleFromMaker(moduleId)
+        end,
+    })
 end
 
 -- ============================================================================

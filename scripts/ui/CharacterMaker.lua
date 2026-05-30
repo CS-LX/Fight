@@ -572,7 +572,7 @@ local function CreateBehaviourPanel()
                 gap = 8,
                 backgroundColor = {35, 35, 40, 255},
                 children = {
-                    UI.Label { text = "预设:", fontSize = 12, color = {180, 180, 180, 255} },
+                    UI.Label { text = "预设:", fontSize = 12, fontColor = {180, 180, 180, 255} },
                     presetDropdown,
                 },
             },

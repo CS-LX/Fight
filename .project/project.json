@@ -5,20 +5,29 @@
     "id": "771520039"
   },
   "entry": "main.lua",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "taptap_publish": {
-    "title": "<game title, required>",
-    "description": "<game description>",
-    "category": "<game category: rpg, casual, action, strategy, simulation, trivia, arcade, adventure, card, sports, racing, puzzle, educational, music, word, board>",
+    "title": "3D Arena Battle",
+    "description": "3D竞技场对战游戏，Spine角色策略布阵对战",
+    "category": "strategy",
     "screen_orientation": "landscape",
     "collection_type": "sce",
     "trial_note": "<developer's note>",
     "app_platforms": "1,2",
-    "developer_id": 339586
+    "developer_id": 248818,
+    "app_id": 864823,
+    "miniapp_id": "tapmcqe3dcsouhsxbc"
   },
   "assets": {
     "icon": "",
     "screenshots": [],
     "promotional_image": ""
+  },
+  "test_qrcode": {
+    "url": "https://tapcode-sce.spark.xd.com/qrcode/p_lksd_1780145742165.png",
+    "generated_at": "2026-05-30T12:55:42.277Z"
+  },
+  "metadata": {
+    "updated_at": "2026-05-30T12:55:42.277Z"
   }
 }

@@ -346,4 +346,132 @@ function M.ResetStatus()
     end
 end
 
+--- 显示战斗结算面板（含收支明细 + 返回按钮）
+---@param title string 标题（"VICTORY!" / "DEFEAT" / "SPONSOR WIN!"）
+---@param isWin boolean 是否胜利（影响颜色）
+---@param items table[] 明细列表 { label: string, amount: number, unit?: string }
+---@param onContinue function 点击"返回大厅"的回调
+function M.ShowSettlement(title, isWin, items, onContinue)
+    if not resultOverlay_ then return end
+
+    -- 计算净收益
+    local netTotal = 0
+    for _, item in ipairs(items) do
+        if not item.unit then  -- 只累加金币项
+            netTotal = netTotal + item.amount
+        end
+    end
+
+    -- 标题颜色
+    local titleColor = isWin and COLORS.gold or COLORS.redText
+
+    -- 构建明细行
+    local detailRows = {}
+    for _, item in ipairs(items) do
+        local unit = item.unit or "G"
+        local amountStr
+        local amountColor
+        if item.amount > 0 then
+            amountStr = "+" .. item.amount .. unit
+            amountColor = { 80, 200, 120, 255 }  -- green
+        elseif item.amount < 0 then
+            amountStr = tostring(item.amount) .. unit
+            amountColor = COLORS.redText
+        else
+            amountStr = "0" .. unit
+            amountColor = COLORS.textMuted
+        end
+
+        table.insert(detailRows, UI.Panel {
+            flexDirection = "row",
+            justifyContent = "space-between",
+            width = "100%",
+            paddingVertical = 2,
+            children = {
+                UI.Label { text = item.label, fontSize = 11, fontColor = COLORS.textMuted },
+                UI.Label { text = amountStr, fontSize = 11, fontWeight = "bold", fontColor = amountColor },
+            }
+        })
+    end
+
+    -- 分隔线
+    table.insert(detailRows, UI.Panel {
+        width = "100%",
+        height = 2,
+        bgColor = COLORS.border,
+        marginVertical = 4,
+    })
+
+    -- 净收益行
+    local netColor = netTotal >= 0 and { 80, 200, 120, 255 } or COLORS.redText
+    local netStr = (netTotal >= 0 and "+" or "") .. netTotal .. "G"
+    table.insert(detailRows, UI.Panel {
+        flexDirection = "row",
+        justifyContent = "space-between",
+        width = "100%",
+        children = {
+            UI.Label { text = "净收益", fontSize = 12, fontWeight = "bold", fontColor = COLORS.text },
+            UI.Label { text = netStr, fontSize = 14, fontWeight = "bold", fontColor = netColor },
+        }
+    })
+
+    -- 当前余额行
+    local Economy = require("economy.Economy")
+    table.insert(detailRows, UI.Panel {
+        flexDirection = "row",
+        justifyContent = "space-between",
+        width = "100%",
+        marginTop = 4,
+        children = {
+            UI.Label { text = "当前余额", fontSize = 10, fontColor = COLORS.textMuted },
+            UI.Label { text = tostring(Economy.GetBalance()) .. "G", fontSize = 12, fontWeight = "bold", fontColor = COLORS.gold },
+        }
+    })
+
+    -- 结算卡片
+    local settlementCard = UI.Panel {
+        width = 220,
+        bgColor = COLORS.surface,
+        backgroundColor = {0, 7, 52, 115},
+        borderWidth = 2,
+        borderColor = COLORS.border,
+        padding = 16,
+        alignItems = "center",
+        gap = 8,
+        children = {
+            -- 标题
+            UI.Label { text = title, fontSize = 22, fontWeight = "bold", fontColor = titleColor },
+            -- 副标题分隔
+            UI.Panel { width = 140, height = 2, bgColor = COLORS.border, marginVertical = 4 },
+            -- 结算标签
+            UI.Label { text = "— 结算明细 —", fontSize = 10, fontColor = COLORS.textMuted },
+            -- 明细区域
+            UI.Panel {
+                width = "100%",
+                paddingHorizontal = 4,
+                gap = 0,
+                children = detailRows,
+            },
+            -- 返回按钮
+            UI.Button {
+                text = "返回大厅",
+                width = 140,
+                height = 32,
+                fontSize = 12,
+                fontWeight = "bold",
+                marginTop = 8,
+                variant = "primary",
+                onClick = function(self)
+                    if onContinue then onContinue() end
+                end,
+            },
+        },
+    }
+
+    -- 替换 resultOverlay_ 内容
+    resultOverlay_:ClearChildren()
+    resultOverlay_:AddChild(settlementCard)
+    resultOverlay_:SetStyle({ opacity = 1, bgColor = { 10, 10, 26, 200 }, pointerEvents = "auto" })
+end
+
 return M
