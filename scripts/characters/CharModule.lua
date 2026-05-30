@@ -128,6 +128,7 @@ end
 function M.Serialize(mod)
     local artData = {
         mode = mod.art.mode or "spine",
+        avatar = mod.art.avatar,
         renderScale = mod.art.renderScale,
         tint = mod.art.tint,
         scaleX = mod.art.scaleX,
@@ -144,6 +145,13 @@ function M.Serialize(mod)
         artData.frames = mod.art.frames
     end
 
+    local aiData = {
+        profile = mod.ai.profile,
+    }
+    if mod.ai.behaviourTree then
+        aiData.behaviourTree = mod.ai.behaviourTree
+    end
+
     return {
         id = mod.id,
         name = mod.name,
@@ -153,11 +161,11 @@ function M.Serialize(mod)
             attackDamage = mod.config.attackDamage,
             attackRange = mod.config.attackRange,
             attackCooldown = mod.config.attackCooldown,
+            stopDistance = mod.config.stopDistance,
+            collisionRadius = mod.config.collisionRadius,
         },
         art = artData,
-        ai = {
-            profile = mod.ai.profile,
-        },
+        ai = aiData,
     }
 end
 
@@ -176,6 +184,7 @@ function M.Deserialize(data)
     if data.art then
         default.art.mode = data.art.mode or "spine"
         -- 通用字段
+        if data.art.avatar then default.art.avatar = data.art.avatar end
         if data.art.renderScale then default.art.renderScale = data.art.renderScale end
         if data.art.tint then default.art.tint = data.art.tint end
         if data.art.scaleX then default.art.scaleX = data.art.scaleX end
@@ -192,6 +201,7 @@ function M.Deserialize(data)
     -- 合并 ai
     if data.ai then
         if data.ai.profile then default.ai.profile = data.ai.profile end
+        if data.ai.behaviourTree then default.ai.behaviourTree = data.ai.behaviourTree end
     end
     return default
 end

@@ -1,0 +1,31 @@
+{
+  "id": "wisdel",
+  "name": "Wisdel",
+  "config": {
+    "baseSpeed": 3.0,
+    "baseHP": 80,
+    "attackDamage": 15,
+    "attackRange": 1.0,
+    "attackCooldown": 0.6,
+    "stopDistance": 0.5,
+    "collisionRadius": 0.3
+  },
+  "art": {
+    "mode": "spine",
+    "avatar": "image/edited_wisdel_avatar_20260529105147.png",
+    "spineSrc": "spine/build_char_1035_wisdel_game_9/build_char_1035_wisdel_game_9.skel",
+    "pma": true,
+    "anims": {
+      "idle": "Default",
+      "move": "Move",
+      "attack": "Interact",
+      "hit": "Interact",
+      "die": "Sleep",
+      "relax": "Relax"
+    },
+    "renderScale": 0.30
+  },
+  "ai": {
+    "profile": "aggressive"
+  }
+}
