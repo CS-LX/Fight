@@ -26,13 +26,13 @@ local function CreateWisdelPreset()
         id = "wisdel",
         name = "Wisdel",
         config = {
-            baseSpeed = 2.5,
-            baseHP = 100,
-            attackDamage = 10,
-            attackRange = 1.2,
-            attackCooldown = 0.8,
-            stopDistance = 0.6,
-            collisionRadius = 0.4,
+            baseSpeed = 3.0,       -- 高速突进
+            baseHP = 80,           -- 脆皮
+            attackDamage = 15,     -- 高伤害
+            attackRange = 1.0,     -- 近战刺客
+            attackCooldown = 0.6,  -- 攻速快
+            stopDistance = 0.5,    -- 贴脸输出
+            collisionRadius = 0.3, -- 体型小巧灵活
         },
         art = {
             avatar = "image/edited_wisdel_avatar_20260529105147.png",
@@ -60,13 +60,13 @@ local function CreateBloodyWolfPreset()
         id = "bloody_wolf",
         name = "Bloody Wolf",
         config = {
-            baseSpeed = 2.5,
-            baseHP = 100,
-            attackDamage = 10,
-            attackRange = 1.2,
-            attackCooldown = 0.8,
-            stopDistance = 0.4,
-            collisionRadius = 0.25,
+            baseSpeed = 1.8,       -- 缓慢笨重
+            baseHP = 180,          -- 肉盾
+            attackDamage = 12,     -- 稳定伤害
+            attackRange = 1.4,     -- 体型大攻击范围广
+            attackCooldown = 1.0,  -- 攻速慢
+            stopDistance = 0.6,    -- 维持安全距离
+            collisionRadius = 0.45,-- 体型大，推挤效果强
         },
         art = {
             mode = "sprite_bone",
@@ -158,7 +158,7 @@ local function CreateBloodyWolfPreset()
                     node_6 = { id = "node_6", type = "Sequence", name = "追击序列", x = 320, y = 240 },
                     node_7 = { id = "node_7", type = "Task", name = "有敌人", taskName = "HasEnemy", x = 580, y = 220 },
                     node_8 = { id = "node_8", type = "Task", name = "追击", taskName = "Chase", x = 580, y = 280 },
-                    node_9 = { id = "node_9", type = "Task", name = "巡逻", taskName = "Patrol", x = 320, y = 400 },
+                    node_9 = { id = "node_9", type = "Task", name = "驻守", taskName = "Guard", x = 320, y = 400 },
                 },
                 edges = {
                     { from = "node_1", to = "node_2", order = 1 },
