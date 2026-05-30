@@ -153,6 +153,20 @@ local HP_BAR_WIDTH = 40    -- 血条宽度 (base pixels)
 local HP_BAR_HEIGHT = 5    -- 血条高度
 local HP_BAR_OFFSET_Y = -2 -- 血条在角色上方的偏移
 
+-- 脚底阴影配置（3D 场景节点）
+local SHADOW_SCALE_X = 1.2   -- 阴影椭圆 X 方向半径（米）
+local SHADOW_SCALE_Z = 0.8   -- 阴影椭圆 Z 方向半径（米）
+local SHADOW_Y_OFFSET = 0.02 -- 阴影离地高度（避免 Z-fighting）
+local SHADOW_ALPHA = 0.5     -- 阴影透明度
+
+--- 共享阴影材质（懒加载）
+---@type Material|nil
+local shadowMaterial_ = nil
+
+--- 阴影节点所在的 scene 引用（懒获取）
+---@type Scene|nil
+local shadowScene_ = nil
+
 --- Spine 容器引用（供增量 AddOne/RemoveOne 使用）
 ---@type Widget|nil
 local spineContainer_ = nil
@@ -170,10 +184,44 @@ function M.CreateEmptyContainer()
     return spineContainer_
 end
 
+--- 获取或创建共享阴影材质（圆形渐变贴图 + alpha 混合）
+---@return Material
+local function GetShadowMaterial()
+    if shadowMaterial_ then return shadowMaterial_ end
+    shadowMaterial_ = Material:new()
+    shadowMaterial_:SetTechnique(0, cache:GetResource("Technique", "Techniques/DiffAlpha.xml"))
+    -- 使用圆形渐变贴图（黑色圆，边缘到透明）
+    local tex = cache:GetResource("Texture2D", "Textures/shadow_blob.png")
+    if tex then
+        shadowMaterial_:SetTexture(TU_DIFFUSE, tex)
+    end
+    -- MatDiffColor 控制整体透明度（纹理已含颜色和 alpha 信息）
+    shadowMaterial_:SetShaderParameter("MatDiffColor", Variant(Color(1.0, 1.0, 1.0, SHADOW_ALPHA)))
+    return shadowMaterial_
+end
+
+--- 在 3D 场景中创建一个脚底阴影节点
+---@param scene Scene
+---@return Node
+local function CreateShadowNode(scene)
+    local node = scene:CreateChild("CharShadow")
+    node.scale = Vector3(SHADOW_SCALE_X, 1.0, SHADOW_SCALE_Z)
+    local model = node:CreateComponent("StaticModel")
+    model:SetModel(cache:GetResource("Model", "Models/Plane.mdl"))
+    model:SetMaterial(GetShadowMaterial())
+    return node
+end
+
 --- 为角色列表创建 Spine 控件
 ---@param characters table[] 逻辑数据列表
 ---@return Widget spineContainer
 function M.CreateSpines(characters)
+    -- 清理已有渲染数据（避免阴影节点残留）
+    for char, rd in pairs(renderData_) do
+        if rd.shadowNode then rd.shadowNode:Remove() end
+    end
+    renderData_ = {}
+
     local children = {}
 
     for _, char in ipairs(characters) do
@@ -231,6 +279,7 @@ function M.CreateSpines(characters)
         -- 存储渲染数据（与逻辑数据分离）
         renderData_[char] = {
             spine = spine,
+            shadowNode = nil,  -- 3D 阴影节点（懒创建）
             currentAnim = def.anims and def.anims.idle or nil,
             lastFlip = initFlip,
             hpBar = hpBg,
@@ -313,6 +362,7 @@ function M.AddOne(char)
 
     renderData_[char] = {
         spine = spine,
+        shadowNode = nil,  -- 3D 阴影节点（懒创建）
         currentAnim = def.anims and def.anims.idle or nil,
         lastFlip = initFlip,
         hpBar = hpBg,
@@ -336,6 +386,7 @@ function M.RemoveOne(char)
     local rd = renderData_[char]
     if not rd then return end
     rd.spine:SetVisible(false)
+    if rd.shadowNode then rd.shadowNode:Remove() end
     if rd.hpBar then rd.hpBar:SetVisible(false) end
     renderData_[char] = nil
 end
@@ -629,7 +680,14 @@ function M.Update(characters, camera, dt)
 
         UpdateDyingVisual(char)
 
-        if char.state == "dead" then goto continue end
+        if char.state == "dead" then
+            -- 隐藏死亡角色的阴影（否则阴影会残留在最后位置）
+            local rdDead = renderData_[char]
+            if rdDead and rdDead.shadowNode then
+                rdDead.shadowNode.enabled = false
+            end
+            goto continue
+        end
 
         -- 世界坐标 → 屏幕归一化坐标 (0~1)
         local screenPos = camera:WorldToScreenPoint(char.worldPos)
@@ -752,8 +810,29 @@ function M.Update(characters, camera, dt)
         -- 也设置 props.flipX（备份：当 dataW > 0 时 Render 内部会用它）
         spine.props.flipX = info.flip
 
-        -- 更新血条位置和填充
+        -- 更新 3D 脚底阴影节点
         local rd = info.rd
+        if not rd.shadowNode then
+            -- 懒创建：从 camera 获取 scene
+            if not shadowScene_ then
+                shadowScene_ = cameraNode:GetScene()
+            end
+            if shadowScene_ then
+                rd.shadowNode = CreateShadowNode(shadowScene_)
+            end
+        end
+        if rd.shadowNode then
+            local wp = info.char.worldPos
+            rd.shadowNode.position = Vector3(wp.x, SHADOW_Y_OFFSET, wp.z)
+            -- 死亡/濒死时隐藏
+            if info.char.state == "dying" or info.char.state == "dead" then
+                rd.shadowNode.enabled = false
+            else
+                rd.shadowNode.enabled = true
+            end
+        end
+
+        -- 更新血条位置和填充
         if rd.hpBar then
             local hpRatio = math.max(0, info.char.hp / info.char.maxHP)
             local barX = math.floor(info.sx - HP_BAR_WIDTH / 2)
@@ -790,18 +869,29 @@ function M.Update(characters, camera, dt)
     end
 end
 
---- 清除所有渲染数据
----@param characters table[]
+--- 清除所有渲染数据（遍历整个 renderData_ 确保无遗漏）
+---@param characters table[]|nil 兼容旧调用（参数已不再使用）
 function M.Clear(characters)
-    for _, char in ipairs(characters) do
-        local rd = renderData_[char]
-        if rd then
-            rd.spine:SetVisible(false)
-            if rd.hpBar then rd.hpBar:SetVisible(false) end
-            renderData_[char] = nil
+    -- 遍历所有 renderData_，确保阶段切换时不会遗漏已死亡/已移除角色的阴影
+    for char, rd in pairs(renderData_) do
+        if rd.spine then rd.spine:SetVisible(false) end
+        if rd.shadowNode then rd.shadowNode:Remove() end
+        if rd.hpBar then rd.hpBar:SetVisible(false) end
+    end
+    renderData_ = {}
+
+    -- 安全网：从 scene 中强制移除所有残留的 "CharShadow" 节点
+    if shadowScene_ then
+        while true do
+            local node = shadowScene_:GetChild("CharShadow", true)
+            if not node then break end
+            node:Remove()
         end
     end
+
     spineContainer_ = nil
+    shadowMaterial_ = nil
+    shadowScene_ = nil
     debugPrinted_ = false  -- 重置后允许再次打印调试
     frameCount_ = 0
 end
