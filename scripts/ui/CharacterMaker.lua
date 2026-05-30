@@ -226,9 +226,12 @@ local function CreateSpineModeContent(art)
         selectedIndex = spineSelectedIdx,
         width = "100%", height = 32,
         fontSize = 12,
-        onChange = function(self, idx)
+        onChange = function(self, value)
             -- 切换 Spine 源和默认动画映射
-            local spData = AssetLibrary.spines[idx]
+            local spData
+            for _, sp in ipairs(AssetLibrary.spines) do
+                if sp.id == value then spData = sp; break end
+            end
             if spData then
                 local mod = CharRegistry.Get(editModuleId_)
                 if mod then

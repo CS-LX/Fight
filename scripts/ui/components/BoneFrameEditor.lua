@@ -420,8 +420,8 @@ function BoneFrameEditor.Create(opts)
                             UI.Dropdown {
                                 options = spriteOptions, selectedIndex = spriteIdx,
                                 width = "100%", height = 26, fontSize = 10,
-                                onChange = function(self, idx)
-                                    bone.sprite = spriteOptions[idx].value
+                                onChange = function(self, value)
+                                    bone.sprite = value
                                     NotifyChange()
                                     if previewContainer then
                                         previewContainer:RemoveAllChildren()
@@ -435,9 +435,8 @@ function BoneFrameEditor.Create(opts)
                             UI.Dropdown {
                                 options = parentOptions, selectedIndex = parentIdx,
                                 width = "100%", height = 26, fontSize = 10,
-                                onChange = function(self, idx)
-                                    local val = parentOptions[idx].value
-                                    bone.parent = (val == "__none__") and nil or val
+                                onChange = function(self, value)
+                                    bone.parent = (value == "__none__") and nil or value
                                     NotifyChange()
                                 end,
                             },
