@@ -114,7 +114,10 @@ end
 -- UI 构建
 -- ============================================================================
 
---- 创建角色卡牌（含 Spine 头像 + 精美样式）
+--- 角色卡尺寸
+local CARD_SIZE = 72
+
+--- 创建角色卡牌（方形头像撑满 + 顶部黑底名称条）
 ---@param team string "red" | "blue"
 ---@return Widget 卡牌面板
 local function CreateCardPanel(team)
@@ -123,78 +126,68 @@ local function CreateCardPanel(team)
     local cardRefs = {}
 
     local isRed = (team == "red")
-    local cardBg = isRed and COLORS.cardRedBg or COLORS.cardBlueBg
-    local cardBorder = isRed and COLORS.cardRedBorder or COLORS.cardBlueBorder
-    local cardSelectedBg = isRed and COLORS.cardRedSelected or COLORS.cardBlueSelected
+    local cardSelectedBorder = isRed and COLORS.cardRedSelected or COLORS.cardBlueSelected
 
     for _, id in ipairs(allIds) do
         local mod = CharRegistry.Get(id)
         local name = mod and mod.name or id
         local avatarImg = mod and mod.art and mod.art.avatar or "image/edited_wisdel_avatar_20260529105147.png"
 
-        -- 头像缩略图容器
-        local thumbContainer = UI.Panel {
-            width = 48,
-            height = 48,
-            overflow = "hidden",
-            borderRadius = 24,
-            bgColor = { 20, 18, 30, 220 },
-            alignItems = "center",
-            justifyContent = "center",
-            children = {
-                UI.Panel {
-                    width = 42,
-                    height = 42,
-                    borderRadius = 21,
-                    backgroundImage = avatarImg,
-                    backgroundFit = "cover",
-                },
-            },
-        }
-
-        -- 角色名标签
-        local nameLabel = UI.Label {
-            text = name,
-            fontSize = 10,
-            fontColor = COLORS.silver,
-            textAlign = "center",
-            marginTop = 3,
-        }
-
         local capturedId = id
         local card = UI.Panel {
-            width = 64,
-            height = 80,
-            padding = 4,
+            width = CARD_SIZE,
+            height = CARD_SIZE,
             marginBottom = 6,
-            alignItems = "center",
-            justifyContent = "center",
-            bgColor = cardBg,
-            borderRadius = 10,
-            borderWidth = 1.5,
-            borderColor = cardBorder,
+            borderRadius = 4,
+            overflow = "hidden",
+            borderWidth = 2,
+            borderColor = { 40, 40, 50, 200 },
             shadowBlur = 4,
-            shadowColor = { 0, 0, 0, 100 },
-            transition = "bgColor 0.2s easeOut, borderColor 0.2s easeOut, scale 0.15s easeOut",
+            shadowColor = { 0, 0, 0, 120 },
+            transition = "borderColor 0.15s easeOut, scale 0.12s easeOut",
             cursor = "pointer",
             onClick = function(self)
                 selectedCard_ = { moduleId = capturedId, team = team }
                 -- 更新本队选中态
                 local refs = isRed and redCardRefs_ or blueCardRefs_
                 for _, c in ipairs(refs) do
-                    c:SetStyle({ bgColor = cardBg, borderColor = cardBorder, scale = 1.0 })
+                    c:SetStyle({ borderColor = { 40, 40, 50, 200 }, scale = 1.0 })
                 end
-                self:SetStyle({ bgColor = cardSelectedBg, borderColor = COLORS.gold, scale = 1.08 })
+                self:SetStyle({ borderColor = COLORS.gold, scale = 1.06 })
                 -- 清除另一队选中
                 local otherRefs = isRed and blueCardRefs_ or redCardRefs_
-                local otherBg = isRed and COLORS.cardBlueBg or COLORS.cardRedBg
-                local otherBorder = isRed and COLORS.cardBlueBorder or COLORS.cardRedBorder
                 for _, c in ipairs(otherRefs) do
-                    c:SetStyle({ bgColor = otherBg, borderColor = otherBorder, scale = 1.0 })
+                    c:SetStyle({ borderColor = { 40, 40, 50, 200 }, scale = 1.0 })
                 end
                 M.SetHint("点击" .. (isRed and "左半场" or "右半场") .. "放置")
             end,
-            children = { thumbContainer, nameLabel },
+            children = {
+                -- 背景头像（撑满整个卡片）
+                UI.Panel {
+                    position = "absolute",
+                    top = 0, left = 0, right = 0, bottom = 0,
+                    backgroundImage = avatarImg,
+                    backgroundFit = "cover",
+                },
+                -- 顶部名称条（黑底白字）
+                UI.Panel {
+                    position = "absolute",
+                    top = 0, left = 0, right = 0,
+                    height = 18,
+                    bgColor = { 0, 0, 0, 180 },
+                    justifyContent = "center",
+                    alignItems = "center",
+                    children = {
+                        UI.Label {
+                            text = name,
+                            fontSize = 10,
+                            fontColor = COLORS.white,
+                            textAlign = "center",
+                            backgroundColor = { 0, 0, 0, 199 },
+                        },
+                    },
+                },
+            },
         }
 
         table.insert(cards, card)
@@ -215,11 +208,11 @@ local function CreateCardPanel(team)
     local headerRow = UI.Panel {
         width = "100%",
         alignItems = "center",
-        marginBottom = 8,
+        marginBottom = 6,
         children = {
             UI.Label {
                 text = teamLabel,
-                fontSize = 13,
+                fontSize = 12,
                 fontColor = teamColor,
                 textAlign = "center",
                 textStroke = { width = 1, color = { 0, 0, 0, 180 } },
@@ -234,12 +227,12 @@ local function CreateCardPanel(team)
     end
 
     return UI.Panel {
-        width = 80,
-        paddingTop = 10,
-        paddingBottom = 10,
+        width = CARD_SIZE + 16,
+        paddingTop = 8,
+        paddingBottom = 8,
         paddingHorizontal = 8,
         bgColor = COLORS.panelBg,
-        borderRadius = 12,
+        borderRadius = 8,
         borderWidth = 1,
         borderColor = COLORS.panelBorder,
         shadowBlur = 8,
