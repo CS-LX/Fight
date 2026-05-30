@@ -347,6 +347,10 @@ end
 
 --- 保存到云端
 function M.Save()
+    if not clientCloud then
+        print("[Economy] clientCloud unavailable, skip save")
+        return
+    end
     clientCloud:BatchSet()
         :SetInt(CLOUD_KEY_BALANCE, balance_)
         :SetInt(CLOUD_KEY_CRYSTAL, crystalBalance_)
@@ -363,6 +367,17 @@ end
 
 --- 从云端加载
 function M.Load()
+    if not clientCloud then
+        -- clientCloud 不可用（如服务端模式或连接失败），使用本地默认值
+        print("[Economy] clientCloud unavailable, using local defaults")
+        balance_ = M.Config.STARTER_GOLD
+        crystalBalance_ = M.Config.STARTER_CRYSTAL
+        history_ = {}
+        RecordTransaction("earn", M.Config.STARTER_GOLD, "新手礼包")
+        RecordTransaction("earn", M.Config.STARTER_CRYSTAL, "工坊解锁礼包", "crystal")
+        FireReady()
+        return
+    end
     clientCloud:BatchGet()
         :Key(CLOUD_KEY_BALANCE)
         :Key(CLOUD_KEY_CRYSTAL)

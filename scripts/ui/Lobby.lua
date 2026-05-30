@@ -8,7 +8,8 @@
 local UI = require("urhox-libs/UI")
 local Economy = require("economy.Economy")
 local Ranked = require("economy.Ranked")
-local LLMClient = require("network.Client")
+-- LLM 网络模块（当前仅预留，需 persistent_world 服务端支持）
+-- local LLMClient = require("network.Client")
 
 local M = {}
 
@@ -223,7 +224,7 @@ function M.BuildUI()
         },
     }
 
-    -- LLM AI 开关（toggle）
+    -- AI 模式提示（LLM 功能预留，需配置服务端后启用）
     local llmToggle = UI.Panel {
         width = "100%",
         flexDirection = "row",
@@ -233,31 +234,10 @@ function M.BuildUI()
         gap = 10,
         children = {
             UI.Label {
-                text = "AI 模式:",
+                text = "AI 模式: 阵型AI",
                 fontSize = 10,
                 fontColor = COLORS.textMuted,
             },
-            UI.Button {
-                text = LLMClient.IsEnabled() and "LLM 大模型" or "本地阵型AI",
-                width = 130,
-                height = 28,
-                backgroundColor = LLMClient.IsEnabled() and COLORS.secondary or COLORS.surface,
-                borderWidth = 1,
-                borderColor = LLMClient.IsEnabled() and COLORS.secondary or COLORS.border,
-                onClick = function(self)
-                    local newState = not LLMClient.IsEnabled()
-                    LLMClient.SetEnabled(newState)
-                    -- 重建 UI 刷新按钮状态
-                    M.BuildUI()
-                end,
-            },
-            LLMClient.IsEnabled() and UI.Label {
-                text = LLMClient.IsConnected() and "已连接" or "未连接服务端",
-                fontSize = 8,
-                fontColor = LLMClient.IsConnected()
-                    and { 80, 200, 120, 255 }
-                    or COLORS.redText,
-            } or nil,
         },
     }
 
