@@ -80,8 +80,14 @@ local onStartBattle_ = nil
 local onClear_ = nil
 ---@type function|nil
 local onOpenMaker_ = nil
+---@type function|nil
+local onBack_ = nil
 ---@type any
 local footer_ = nil
+
+--- 部署模式: "pvp" (双方手动) | "pvai" (玩家只控红方)
+---@type string
+local mode_ = "pvai"
 
 -- ============================================================================
 -- 公开接口
@@ -255,12 +261,14 @@ local function CreateCardPanel(team)
 end
 
 --- 打开部署编辑器
----@param opts { onStartBattle: function, onClear: function, onOpenMaker: function|nil, spineLayer: Widget|nil }
+---@param opts { onStartBattle: function, onClear: function, onOpenMaker: function|nil, onBack: function|nil, spineLayer: Widget|nil, mode: string|nil }
 function M.Open(opts)
     opts = opts or {}
     onStartBattle_ = opts.onStartBattle
     onClear_ = opts.onClear
     onOpenMaker_ = opts.onOpenMaker
+    onBack_ = opts.onBack
+    mode_ = opts.mode or "pvai"
     local spineLayer = opts.spineLayer
 
     selectedCard_ = nil
@@ -268,10 +276,46 @@ function M.Open(opts)
     blueCardRefs_ = {}
     isOpen_ = true
 
-    -- 左侧红方卡牌面板
+    -- 左侧红方卡牌面板（玩家控制）
     local redPanel = CreateCardPanel("red")
-    -- 右侧蓝方卡牌面板
-    local bluePanel = CreateCardPanel("blue")
+    -- 右侧蓝方面板
+    local bluePanel
+    if mode_ == "pvp" then
+        bluePanel = CreateCardPanel("blue")
+    else
+        -- pvai 模式: 蓝方面板替换为 AI 信息提示
+        bluePanel = UI.Panel {
+            width = CARD_SIZE + 16,
+            paddingTop = 8,
+            paddingBottom = 8,
+            paddingHorizontal = 8,
+            backgroundColor = { 27, 27, 58, 180 },
+            borderWidth = 2,
+            borderColor = COLORS.panelBorder,
+            alignItems = "center",
+            children = {
+                UI.Label {
+                    text = "BLUE",
+                    fontSize = 12,
+                    fontWeight = "bold",
+                    fontColor = COLORS.blueText,
+                    marginBottom = 8,
+                },
+                UI.Label {
+                    text = "AI",
+                    fontSize = 18,
+                    fontWeight = "bold",
+                    fontColor = COLORS.blueText,
+                    marginBottom = 4,
+                },
+                UI.Label {
+                    text = "自动部署",
+                    fontSize = 10,
+                    fontColor = COLORS.hintText,
+                },
+            },
+        }
+    end
 
     -- === 顶部标题栏（红蓝渐变） ===
     local header = UI.Panel {
@@ -423,6 +467,25 @@ function M.Open(opts)
         end,
     }
 
+    -- 返回按钮
+    local backBtn = UI.Button {
+        text = "BACK",
+        width = 60,
+        height = 28,
+        fontSize = 10,
+        fontWeight = "bold",
+        backgroundColor = { 80, 80, 100, 255 },
+        hoverBackgroundColor = { 100, 100, 130, 255 },
+        pressedBackgroundColor = { 60, 60, 80, 255 },
+        textColor = COLORS.white,
+        borderWidth = 2,
+        borderColor = COLORS.panelBorder,
+        marginLeft = 8,
+        onClick = function(self)
+            if onBack_ then onBack_() end
+        end,
+    }
+
     local footer = UI.Panel {
         width = "100%",
         height = 44,
@@ -444,6 +507,7 @@ function M.Open(opts)
             startBtn_,
             clearBtn,
             makerBtn,
+            backBtn,
         }
     }
 

@@ -65,9 +65,9 @@ function M.Open(opts)
     onCancel_ = opts.onCancel
 
     selectedTeam_ = "red"
-    betAmount_ = Economy.Config.SPONSOR_MIN_BET
+    betAmount_ = math.min(Economy.Config.SPONSOR_MIN_BET, Economy.GetBalance())
 
-    M.BuildUI(opts.redCount, opts.blueCount)
+    M.BuildUI(opts.redCount, opts.blueCount, opts.spineLayer)
 end
 
 --- 关闭
@@ -91,240 +91,199 @@ end
 -- UI 构建
 -- ============================================================================
 
-function M.BuildUI(redCount, blueCount)
+function M.BuildUI(redCount, blueCount, spineLayer)
     local balance = Economy.GetBalance()
     local maxBet = math.min(Economy.Config.SPONSOR_MAX_BET, balance)
 
-    -- 标题
-    local titleSection = UI.Panel {
-        alignItems = "center",
-        marginBottom = 20,
-        children = {
-            UI.Label {
-                text = "SPECTATE MATCH",
-                fontSize = 18,
-                fontWeight = "bold",
-                color = COLORS.primary,
-            },
-            UI.Label {
-                text = "选择你支持的队伍并押注",
-                fontSize = 10,
-                color = COLORS.textMuted,
-                marginTop = 4,
-            },
-        },
-    }
-
-    -- 对阵信息
-    local matchInfo = UI.Panel {
+    -- === 顶部标题栏 ===
+    local topBar = UI.Panel {
+        width = "100%",
+        position = "absolute",
+        top = 0, left = 0,
         flexDirection = "row",
-        alignItems = "center",
         justifyContent = "center",
-        marginBottom = 20,
-        gap = 16,
+        alignItems = "center",
+        height = 36,
+        backgroundColor = { 15, 15, 35, 200 },
         children = {
-            -- 红方
-            UI.Panel {
-                alignItems = "center",
-                children = {
-                    UI.Label { text = "RED", fontSize = 14, fontWeight = "bold", fontColor = COLORS.redText },
-                    UI.Label { text = redCount .. " units", fontSize = 10, fontColor = COLORS.textMuted },
-                },
-            },
-            UI.Label { text = "VS", fontSize = 16, fontWeight = "bold", fontColor = COLORS.text },
-            -- 蓝方
-            UI.Panel {
-                alignItems = "center",
-                children = {
-                    UI.Label { text = "BLUE", fontSize = 14, fontWeight = "bold", fontColor = COLORS.blueText },
-                    UI.Label { text = blueCount .. " units", fontSize = 10, fontColor = COLORS.textMuted },
-                },
+            UI.Label {
+                text = string.format("SPECTATE  RED %d  VS  BLUE %d", redCount, blueCount),
+                fontSize = 13,
+                fontWeight = "bold",
+                fontColor = COLORS.primary,
             },
         },
     }
 
-    -- 队伍选择按钮
-    local teamSelectLabel = UI.Label {
-        text = "押注: RED",
-        fontSize = 11,
+    -- === 底部押注栏 ===
+    -- 队伍选择指示
+    local teamLabel = UI.Label {
+        text = "RED",
+        fontSize = 12,
         fontWeight = "bold",
         fontColor = COLORS.redText,
-        marginBottom = 8,
     }
 
-    local teamSection = UI.Panel {
-        alignItems = "center",
-        marginBottom = 16,
-        children = {
-            UI.Label { text = "选择队伍", fontSize = 10, fontColor = COLORS.textMuted, marginBottom = 6 },
-            UI.Panel {
-                flexDirection = "row",
-                gap = 12,
-                children = {
-                    UI.Button {
-                        text = "RED",
-                        width = 80,
-                        height = 32,
-                        backgroundColor = COLORS.redText,
-                        boxShadow = PIXEL_SHADOW,
-                        onClick = function()
-                            selectedTeam_ = "red"
-                            teamSelectLabel:SetText("押注: RED")
-                            teamSelectLabel:SetFontColor(COLORS.redText)
-                        end,
-                    },
-                    UI.Button {
-                        text = "BLUE",
-                        width = 80,
-                        height = 32,
-                        backgroundColor = COLORS.blueText,
-                        boxShadow = PIXEL_SHADOW,
-                        onClick = function()
-                            selectedTeam_ = "blue"
-                            teamSelectLabel:SetText("押注: BLUE")
-                            teamSelectLabel:SetFontColor(COLORS.blueText)
-                        end,
-                    },
-                },
-            },
-            teamSelectLabel,
-        },
-    }
-
-    -- 押注金额
+    -- 押注金额显示
     local betLabel = UI.Label {
         text = betAmount_ .. "G",
-        fontSize = 13,
+        fontSize = 14,
         fontWeight = "bold",
         fontColor = COLORS.gold,
     }
 
-    local betSection = UI.Panel {
+    local bottomBar = UI.Panel {
+        width = "100%",
+        position = "absolute",
+        bottom = 0, left = 0,
+        backgroundColor = { 20, 20, 45, 240 },
+        borderColor = COLORS.border,
+        borderTopWidth = 2,
+        padding = 10,
+        paddingLeft = 16,
+        paddingRight = 16,
+        flexDirection = "row",
         alignItems = "center",
-        marginBottom = 20,
+        justifyContent = "space-between",
         children = {
-            UI.Label { text = "押注金额", fontSize = 10, fontColor = COLORS.textMuted, marginBottom = 6 },
+            -- 左: 队伍选择
             UI.Panel {
                 flexDirection = "row",
                 alignItems = "center",
-                gap = 10,
+                gap = 6,
+                children = {
+                    UI.Label { text = "押注", fontSize = 10, fontColor = COLORS.textMuted },
+                    UI.Button {
+                        text = "RED",
+                        width = 52, height = 28,
+                        fontSize = 10, fontWeight = "bold",
+                        backgroundColor = COLORS.redText,
+                        boxShadow = PIXEL_SHADOW,
+                        onClick = function()
+                            selectedTeam_ = "red"
+                            teamLabel:SetText("RED")
+                            teamLabel:SetFontColor(COLORS.redText)
+                        end,
+                    },
+                    UI.Button {
+                        text = "BLUE",
+                        width = 52, height = 28,
+                        fontSize = 10, fontWeight = "bold",
+                        backgroundColor = COLORS.blueText,
+                        boxShadow = PIXEL_SHADOW,
+                        onClick = function()
+                            selectedTeam_ = "blue"
+                            teamLabel:SetText("BLUE")
+                            teamLabel:SetFontColor(COLORS.blueText)
+                        end,
+                    },
+                    teamLabel,
+                },
+            },
+            -- 中: 金额调节
+            UI.Panel {
+                flexDirection = "row",
+                alignItems = "center",
+                gap = 6,
                 children = {
                     UI.Button {
                         text = "-",
-                        width = 32,
-                        height = 32,
+                        width = 28, height = 28,
+                        fontSize = 12,
                         boxShadow = PIXEL_SHADOW,
                         onClick = function()
-                            betAmount_ = math.max(Economy.Config.SPONSOR_MIN_BET, betAmount_ - 10)
+                            betAmount_ = math.max(0, betAmount_ - 10)
                             betLabel:SetText(betAmount_ .. "G")
                         end,
                     },
                     betLabel,
                     UI.Button {
                         text = "+",
-                        width = 32,
-                        height = 32,
+                        width = 28, height = 28,
+                        fontSize = 12,
                         boxShadow = PIXEL_SHADOW,
                         onClick = function()
                             betAmount_ = math.min(maxBet, betAmount_ + 10)
                             betLabel:SetText(betAmount_ .. "G")
                         end,
                     },
+                    UI.Label {
+                        text = "/ " .. balance .. "G",
+                        fontSize = 9,
+                        fontColor = COLORS.textMuted,
+                    },
                 },
             },
-            UI.Label {
-                text = "余额: " .. balance .. "G | 赔率 " .. string.format("%.1fx", Economy.Config.SPONSOR_WIN_MULTIPLIER),
-                fontSize = 9,
-                color = COLORS.textMuted,
-                marginTop = 4,
+            -- 右: 操作按钮
+            UI.Panel {
+                flexDirection = "row",
+                alignItems = "center",
+                gap = 8,
+                children = {
+                    UI.Button {
+                        text = "FIGHT!",
+                        width = 80, height = 32,
+                        fontSize = 11, fontWeight = "bold",
+                        backgroundColor = COLORS.primary,
+                        boxShadow = PIXEL_SHADOW,
+                        onClick = function()
+                            if betAmount_ > 0 and betAmount_ > balance then return end
+                            local cb = (betAmount_ > 0) and onConfirmBet_ or onSkipBet_
+                            local amount = betAmount_
+                            local team = selectedTeam_
+                            M.Close()
+                            if amount > 0 then
+                                UI.Toast { text = string.format("-%dG 押注%s方", amount, team), duration = 2000 }
+                                if cb then cb(amount, team) end
+                            else
+                                UI.Toast { text = "免费观战", duration = 1500 }
+                                if cb then cb() end
+                            end
+                        end,
+                    },
+                    UI.Button {
+                        text = "只看",
+                        width = 52, height = 32,
+                        fontSize = 10,
+                        backgroundColor = COLORS.surfaceHover,
+                        borderWidth = 2,
+                        borderColor = COLORS.border,
+                        onClick = function()
+                            local cb = onSkipBet_
+                            M.Close()
+                            if cb then cb() end
+                        end,
+                    },
+                    UI.Button {
+                        text = "返回",
+                        width = 52, height = 32,
+                        fontSize = 10,
+                        backgroundColor = COLORS.surfaceHover,
+                        borderWidth = 2,
+                        borderColor = COLORS.border,
+                        onClick = function()
+                            local cb = onCancel_
+                            M.Close()
+                            if cb then cb() end
+                        end,
+                    },
+                },
             },
         },
     }
 
-    -- 操作按钮
-    local actions = UI.Panel {
-        flexDirection = "row",
-        gap = 12,
-        children = {
-            UI.Button {
-                text = "确认押注",
-                width = 120,
-                height = 36,
-                backgroundColor = COLORS.primary,
-                boxShadow = PIXEL_SHADOW,
-                onClick = function()
-                    if betAmount_ > balance then return end
-                    local cb = onConfirmBet_
-                    local amount = betAmount_
-                    local team = selectedTeam_
-                    M.Close()
-                    UI.Toast { text = string.format("-%dG 押注%s方", amount, team), duration = 2000 }
-                    if cb then
-                        cb(amount, team)
-                    end
-                end,
-            },
-            UI.Button {
-                text = "只看不押",
-                width = 100,
-                height = 36,
-                backgroundColor = COLORS.surfaceHover,
-                borderWidth = 2,
-                borderColor = COLORS.border,
-                boxShadow = PIXEL_SHADOW,
-                onClick = function()
-                    local cb = onSkipBet_
-                    M.Close()
-                    if cb then
-                        cb()
-                    end
-                end,
-            },
-            UI.Button {
-                text = "返回",
-                width = 80,
-                height = 36,
-                backgroundColor = COLORS.surfaceHover,
-                borderWidth = 2,
-                borderColor = COLORS.border,
-                onClick = function()
-                    local cb = onCancel_
-                    M.Close()
-                    if cb then
-                        cb()
-                    end
-                end,
-            },
-        },
-    }
+    -- 组装：spineLayer 全屏显示 + 顶部/底部栏覆盖
+    local rootChildren = {}
+    if spineLayer then
+        table.insert(rootChildren, spineLayer)
+    end
+    table.insert(rootChildren, topBar)
+    table.insert(rootChildren, bottomBar)
 
-    -- 组装
     root_ = UI.Panel {
         width = "100%",
         height = "100%",
-        backgroundColor = COLORS.background,
-        alignItems = "center",
-        justifyContent = "center",
-        children = {
-            UI.Panel {
-                width = 360,
-                padding = 24,
-                backgroundColor = COLORS.surface,
-                borderWidth = 2,
-                borderColor = COLORS.border,
-                alignItems = "center",
-                boxShadow = {
-                    { x = 4, y = 4, blur = 0, color = COLORS.shadow },
-                },
-                children = {
-                    titleSection,
-                    matchInfo,
-                    teamSection,
-                    betSection,
-                    actions,
-                },
-            },
-        },
+        children = rootChildren,
     }
 
     UI.SetRoot(root_)

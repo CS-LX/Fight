@@ -181,9 +181,34 @@ function EnterDeployment(ranked)
     -- 创建空 Spine 容器（角色将逐步添加）
     local spineLayer = CharRender.CreateEmptyContainer()
 
+    -- PvAI 模式：预先部署 AI 蓝方角色（让玩家可以看到对手阵容）
+    local aiConfig = ranked and Ranked.GetAIConfig() or { teamSize = math.random(3, 5), statMultiplier = 1.0 }
+    local allDefs = CharRegistry.GetAllIds()
+    if #allDefs == 0 then allDefs = { "doro" } end
+
+    local halfW = Config.ArenaWidth * 0.5 - 2
+    for i = 1, aiConfig.teamSize do
+        local defId = allDefs[math.random(1, #allDefs)]
+        local x = math.random() * halfW + 1
+        local z = (math.random() - 0.5) * Config.ArenaDepth * 0.8
+        local char = CharLogic.Create(defId, "blue", Vector3(x, 0, z))
+        if ranked then
+            char.hp = math.floor((char.hp or 100) * aiConfig.statMultiplier)
+            char.maxHp = char.hp
+            char.atk = math.floor((char.atk or 10) * aiConfig.statMultiplier)
+        end
+        table.insert(characters_, char)
+    end
+    -- 渲染 AI 角色（逐个添加到已有容器，不能用 CreateSpines 因为它会覆盖容器）
+    for _, char in ipairs(characters_) do
+        CharRender.AddOne(char)
+    end
+    print(string.format("[Deploy] AI blue pre-deployed %d units", aiConfig.teamSize))
+
     -- 打开部署 UI（spineLayer 作为底层传入）
     DeploymentEditor.Open({
         spineLayer = spineLayer,
+        mode = "pvai",
         onStartBattle = function()
             StartBattleFromDeployment()
         end,
@@ -192,6 +217,10 @@ function EnterDeployment(ranked)
         end,
         onOpenMaker = function()
             OpenCharacterMaker()
+        end,
+        onBack = function()
+            DeploymentEditor.Close()
+            EnterLobby()
         end,
     })
 end
@@ -267,7 +296,15 @@ local function HandleDeployClick(screenX, screenY)
 
     local selected = DeploymentEditor.GetSelectedCard()
 
-    -- 如果没有选中卡且点击附近有角色 → 删除
+    -- pvai 模式下，限制只能放在红方半场
+    local posTeam = GetTeamForPosition(groundPos)
+    if posTeam ~= "red" then
+        -- 不允许操作蓝方（AI）区域
+        DeploymentEditor.SetHint("蓝方由 AI 控制，请在左半场放置你的角色")
+        return
+    end
+
+    -- 如果没有选中卡且点击附近有角色 → 删除（只能删除自己的红方角色）
     if not selected then
         local nearIdx = FindNearestDeployed(groundPos)
         if nearIdx then
@@ -285,15 +322,14 @@ local function HandleDeployClick(screenX, screenY)
             DeploymentEditor.SetHint("已移除角色（选择卡牌可放置新角色）")
             print("[Deploy] Removed unit at " .. string.format("%.1f, %.1f", unit.worldX, unit.worldZ))
         else
-            DeploymentEditor.SetHint("选择角色卡，然后点击场地放置")
+            DeploymentEditor.SetHint("选择角色卡，然后点击左半场放置")
         end
         return
     end
 
-    -- 检查点击位置是否在所选队伍的半场
-    local posTeam = GetTeamForPosition(groundPos)
+    -- 选中的卡强制为红方（pvai 模式下 selected.team 始终为 red）
     if posTeam ~= selected.team then
-        DeploymentEditor.SetHint(selected.team == "red" and "红方请放在左半场" or "蓝方请放在右半场")
+        DeploymentEditor.SetHint("红方请放在左半场")
         return
     end
 
@@ -315,27 +351,35 @@ local function HandleDeployClick(screenX, screenY)
     print(string.format("[Deploy] Placed %s(%s) at %.1f, %.1f", selected.moduleId, selected.team, groundPos.x, groundPos.z))
 end
 
---- 更新部署计数
+--- 更新部署计数（红方从 deployedUnits_ 统计，蓝方从 characters_ 统计）
 function UpdateDeployCounts()
     local redCount = 0
     local blueCount = 0
     for _, unit in ipairs(deployedUnits_) do
-        if unit.team == "red" then redCount = redCount + 1
-        else blueCount = blueCount + 1 end
+        if unit.team == "red" then redCount = redCount + 1 end
+    end
+    for _, char in ipairs(characters_) do
+        if char.team == "blue" then blueCount = blueCount + 1 end
     end
     DeploymentEditor.UpdateCounts(redCount, blueCount)
 end
 
---- 清空所有已部署角色
+--- 清空玩家部署的角色（保留 AI 蓝方预部署角色）
 function ClearDeployedUnits()
+    -- 移除玩家手动放置的角色
     for _, unit in ipairs(deployedUnits_) do
         CharRender.RemoveOne(unit.char)
+        for i, c in ipairs(characters_) do
+            if c == unit.char then
+                table.remove(characters_, i)
+                break
+            end
+        end
     end
-    characters_ = {}
     deployedUnits_ = {}
     UpdateDeployCounts()
-    DeploymentEditor.SetHint("已清空，重新选择角色放置")
-    print("[Deploy] Cleared all units")
+    DeploymentEditor.SetHint("已清空你的角色，重新选择放置")
+    print("[Deploy] Cleared player units (AI units preserved)")
 end
 
 -- ============================================================================
@@ -411,43 +455,8 @@ function StartBattleFromDeployment()
     local costLabel = isRankedBattle_ and "排位部署x" or "部署角色x"
     Economy.Spend(deployCost, costLabel .. unitCount)
 
-    -- 排位模式：根据段位自动补充 AI 敌方角色
-    if isRankedBattle_ then
-        local aiConfig = Ranked.GetAIConfig()
-        local enemyTeam = "blue"
-        -- 检查玩家放了哪些队伍，对面补 AI
-        local playerHasRed = false
-        local playerHasBlue = false
-        for _, u in ipairs(deployedUnits_) do
-            if u.team == "red" then playerHasRed = true end
-            if u.team == "blue" then playerHasBlue = true end
-        end
-        -- 对面补 AI（默认补蓝方，如果玩家全放蓝方则补红方）
-        if playerHasBlue and not playerHasRed then
-            enemyTeam = "red"
-        end
-
-        -- 获取可用角色列表
-        local allDefs = CharRegistry.GetAllIds()
-        if #allDefs == 0 then allDefs = { "doro" } end
-
-        local halfW = Config.ArenaWidth * 0.5 - 2
-        for i = 1, aiConfig.teamSize do
-            local defId = allDefs[math.random(1, #allDefs)]
-            local x = enemyTeam == "blue"
-                and (math.random() * halfW + 1)
-                or (-math.random() * halfW - 1)
-            local z = (math.random() - 0.5) * Config.ArenaDepth * 0.8
-            local char = CharLogic.Create(defId, enemyTeam, Vector3(x, 0, z))
-            -- 应用段位属性倍率
-            char.hp = math.floor((char.hp or 100) * aiConfig.statMultiplier)
-            char.maxHp = char.hp
-            char.atk = math.floor((char.atk or 10) * aiConfig.statMultiplier)
-            table.insert(characters_, char)
-        end
-        print(string.format("[Ranked] AI team: %d units, stat×%.1f (%s)",
-            aiConfig.teamSize, aiConfig.statMultiplier, Ranked.GetTierName()))
-    end
+    -- AI 蓝方角色已在 EnterDeployment 阶段预部署（characters_ 中已有）
+    -- 这里不再重复部署
 
     -- 关闭部署 UI
     DeploymentEditor.Close()
@@ -490,8 +499,8 @@ end
 -- ============================================================================
 
 function UpdateGameLogic(dt)
-    if gameState_ == "deployment" then
-        -- 部署阶段：角色可见但静止（仅更新渲染位置，不更新 AI）
+    if gameState_ == "deployment" or gameState_ == "spectating" then
+        -- 部署/观战准备阶段：角色可见但静止（仅更新渲染位置，不更新 AI）
         if #characters_ > 0 then
             CharRender.Update(characters_, camera_, dt)
         end
@@ -724,9 +733,16 @@ function EnterSpectateSetup()
         end
     end
 
+    -- 创建 Spine 容器并渲染 AI 双方角色（让玩家在投注时能看到阵容）
+    local spineLayer = CharRender.CreateEmptyContainer()
+    for _, char in ipairs(characters_) do
+        CharRender.AddOne(char)
+    end
+
     -- 显示赞助观战 UI（押注选择 + 战斗HUD）
     local SpectateUI = require("ui.SpectateUI")
     SpectateUI.Open({
+        spineLayer = spineLayer,
         redCount = redCount,
         blueCount = blueCount,
         characters = characters_,
