@@ -96,6 +96,15 @@ function Start()
     SubscribeToEvent("MouseButtonDown", "HandleMouseDown")
     SubscribeToEvent("TouchBegin", "HandleTouchBegin")
 
+    -- 循环背景音乐
+    local bgm = cache:GetResource("Sound", "audio/Carefree.mp3")
+    bgm.looped = true
+    local bgmNode = scene_:CreateChild("BGM")
+    local bgmSource = bgmNode:CreateComponent("SoundSource")
+    bgmSource:SetSoundType("Music")
+    bgmSource:Play(bgm)
+    bgmSource.gain = 0.35
+
     -- 游戏从大厅开始
     EnterLobby()
 
