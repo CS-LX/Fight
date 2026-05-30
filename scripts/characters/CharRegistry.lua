@@ -52,6 +52,125 @@ local function CreateWisdelPreset()
     }
 end
 
+--- Bloody Wolf 预设（sprite_bone 团子角色）
+local function CreateBloodyWolfPreset()
+    return {
+        id = "bloody_wolf",
+        name = "Bloody Wolf",
+        config = {
+            baseSpeed = 2.5,
+            baseHP = 100,
+            attackDamage = 10,
+            attackRange = 1.2,
+            attackCooldown = 0.8,
+        },
+        art = {
+            mode = "sprite_bone",
+            avatar = "image/Bunny.png",
+            renderScale = 2.5,
+            frames = {
+                -- 待机：团子呼吸鼓涌（横向微胀+纵向微缩，交替）
+                idle = {
+                    duration = 1.2,
+                    bones = { { id = "body", sprite = "bunny", pivotX = 0, pivotY = 0 } },
+                    keyframes = {
+                        ["0"]   = { body = { x = 0, y = 0, rot = 0, scaleX = 1.0,  scaleY = 0.92 } },
+                        ["0.3"] = { body = { x = 0, y = -2, rot = 0, scaleX = 0.95, scaleY = 1.05 } },
+                        ["0.6"] = { body = { x = 0, y = 0, rot = 0, scaleX = 1.02, scaleY = 0.94 } },
+                        ["0.9"] = { body = { x = 0, y = -1, rot = 0, scaleX = 0.97, scaleY = 1.02 } },
+                        ["1.2"] = { body = { x = 0, y = 0, rot = 0, scaleX = 1.0,  scaleY = 0.92 } },
+                    },
+                },
+                -- 移动：团子蹦跳前进（上下弹跳+落地压扁+微摇摆）
+                move = {
+                    duration = 0.5,
+                    bones = { { id = "body", sprite = "bunny", pivotX = 0, pivotY = 0 } },
+                    keyframes = {
+                        ["0"]    = { body = { x = 0, y = 0,   rot = -5,  scaleX = 1.1,  scaleY = 0.8 } },
+                        ["0.15"] = { body = { x = 0, y = -8,  rot = 5,   scaleX = 0.9,  scaleY = 1.15 } },
+                        ["0.3"]  = { body = { x = 0, y = 0,   rot = 5,   scaleX = 1.12, scaleY = 0.78 } },
+                        ["0.4"]  = { body = { x = 0, y = -6,  rot = -3,  scaleX = 0.92, scaleY = 1.1 } },
+                        ["0.5"]  = { body = { x = 0, y = 0,   rot = -5,  scaleX = 1.1,  scaleY = 0.8 } },
+                    },
+                },
+                -- 攻击：用头猛撞（先蓄力后仰，再猛冲前顶）
+                attack = {
+                    duration = 0.6,
+                    bones = { { id = "body", sprite = "bunny", pivotX = 0, pivotY = 0 } },
+                    keyframes = {
+                        ["0"]   = { body = { x = 0,   y = 0,  rot = 0,   scaleX = 1.0,  scaleY = 1.0 } },
+                        ["0.15"]= { body = { x = -4,  y = 2,  rot = -10, scaleX = 1.1,  scaleY = 0.85 } },
+                        ["0.3"] = { body = { x = 10,  y = -2, rot = 15,  scaleX = 0.85, scaleY = 1.15 } },
+                        ["0.45"]= { body = { x = 6,   y = 0,  rot = 5,   scaleX = 1.05, scaleY = 0.95 } },
+                        ["0.6"] = { body = { x = 0,   y = 0,  rot = 0,   scaleX = 1.0,  scaleY = 1.0 } },
+                    },
+                },
+                -- 受击：被撞后晃动
+                hit = {
+                    duration = 0.4,
+                    bones = { { id = "body", sprite = "bunny", pivotX = 0, pivotY = 0 } },
+                    keyframes = {
+                        ["0"]   = { body = { x = 0,  y = 0, rot = 0,   scaleX = 1.0,  scaleY = 1.0 } },
+                        ["0.1"] = { body = { x = -5, y = 0, rot = -12, scaleX = 1.1,  scaleY = 0.9 } },
+                        ["0.2"] = { body = { x = 3,  y = 0, rot = 8,   scaleX = 0.95, scaleY = 1.05 } },
+                        ["0.3"] = { body = { x = -1, y = 0, rot = -3,  scaleX = 1.02, scaleY = 0.98 } },
+                        ["0.4"] = { body = { x = 0,  y = 0, rot = 0,   scaleX = 1.0,  scaleY = 1.0 } },
+                    },
+                },
+                -- 死亡：压扁倒地
+                die = {
+                    duration = 0.8,
+                    bones = { { id = "body", sprite = "bunny", pivotX = 0, pivotY = 0 } },
+                    keyframes = {
+                        ["0"]   = { body = { x = 0, y = 0,  rot = 0,   scaleX = 1.0, scaleY = 1.0 } },
+                        ["0.3"] = { body = { x = 0, y = 2,  rot = 30,  scaleX = 1.2, scaleY = 0.7 } },
+                        ["0.6"] = { body = { x = 2, y = 4,  rot = 70,  scaleX = 1.4, scaleY = 0.5 } },
+                        ["0.8"] = { body = { x = 3, y = 5,  rot = 90,  scaleX = 1.5, scaleY = 0.4 } },
+                    },
+                },
+                -- 放松：悠闲晃动
+                relax = {
+                    duration = 2.0,
+                    bones = { { id = "body", sprite = "bunny", pivotX = 0, pivotY = 0 } },
+                    keyframes = {
+                        ["0"]   = { body = { x = 0, y = 0,  rot = 0,  scaleX = 1.0,  scaleY = 1.0 } },
+                        ["0.5"] = { body = { x = 0, y = -1, rot = 3,  scaleX = 0.98, scaleY = 1.02 } },
+                        ["1.0"] = { body = { x = 0, y = 0,  rot = 0,  scaleX = 1.0,  scaleY = 1.0 } },
+                        ["1.5"] = { body = { x = 0, y = -1, rot = -3, scaleX = 1.02, scaleY = 0.98 } },
+                        ["2.0"] = { body = { x = 0, y = 0,  rot = 0,  scaleX = 1.0,  scaleY = 1.0 } },
+                    },
+                },
+            },
+        },
+        ai = {
+            behaviourTree = {
+                rootId = "node_1",
+                nodes = {
+                    node_1 = { id = "node_1", type = "ActivePriority", name = "抢占优先级", x = 60, y = 200 },
+                    node_2 = { id = "node_2", type = "Sequence", name = "攻击序列", x = 319, y = 84 },
+                    node_3 = { id = "node_3", type = "Task", name = "有敌人", taskName = "HasEnemy", x = 580, y = 20 },
+                    node_4 = { id = "node_4", type = "Task", name = "在攻击范围", taskName = "InAttackRange", x = 580, y = 80 },
+                    node_5 = { id = "node_5", type = "Task", name = "攻击", taskName = "Attack", x = 580, y = 140 },
+                    node_6 = { id = "node_6", type = "Sequence", name = "追击序列", x = 320, y = 240 },
+                    node_7 = { id = "node_7", type = "Task", name = "有敌人", taskName = "HasEnemy", x = 580, y = 220 },
+                    node_8 = { id = "node_8", type = "Task", name = "追击", taskName = "Chase", x = 580, y = 280 },
+                    node_9 = { id = "node_9", type = "Task", name = "巡逻", taskName = "Patrol", x = 320, y = 400 },
+                },
+                edges = {
+                    { from = "node_1", to = "node_2", order = 1 },
+                    { from = "node_1", to = "node_6", order = 2 },
+                    { from = "node_1", to = "node_9", order = 3 },
+                    { from = "node_2", to = "node_3", order = 1 },
+                    { from = "node_2", to = "node_4", order = 2 },
+                    { from = "node_2", to = "node_5", order = 3 },
+                    { from = "node_6", to = "node_7", order = 1 },
+                    { from = "node_6", to = "node_8", order = 2 },
+                },
+            },
+        },
+    }
+end
+
 -- ============================================================================
 -- 公开接口
 -- ============================================================================
@@ -64,6 +183,9 @@ function M.Init()
     -- 注册内置预设
     local wisdel = CreateWisdelPreset()
     M.Register(wisdel, true)
+
+    local bloodyWolf = CreateBloodyWolfPreset()
+    M.Register(bloodyWolf, true)
 
     -- 恢复持久化的自定义角色
     local saved = CharPersist.LoadAll()

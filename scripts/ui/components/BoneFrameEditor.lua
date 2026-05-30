@@ -111,8 +111,10 @@ function BoneFrameEditor.Create(opts)
         for i, bone in ipairs(phaseData.bones) do
             local kf = GetBoneKF(bone.id, time)
             local spriteInfo = AssetLibrary.GetSprite(bone.sprite)
-            local w = spriteInfo and spriteInfo.width or 20
-            local h = spriteInfo and spriteInfo.height or 20
+            local baseW = spriteInfo and spriteInfo.width or 20
+            local baseH = spriteInfo and spriteInfo.height or 20
+            local w = math.floor(baseW * (kf.scaleX or 1))
+            local h = math.floor(baseH * (kf.scaleY or 1))
             local color = spriteInfo and spriteInfo.color or COLORS.boneNormal
             local isSelected = (i == selectedBoneIdx)
 
@@ -120,13 +122,12 @@ function BoneFrameEditor.Create(opts)
             local px = 90 + (bone.pivotX or 0) + (kf.x or 0)
             local py = 70 + (bone.pivotY or 0) + (kf.y or 0)
 
-            boneWidgets[#boneWidgets + 1] = UI.Panel {
+            local panelProps = {
                 position = "absolute",
                 left = px - w / 2,
                 top = py - h / 2,
                 width = w,
                 height = h,
-                backgroundColor = color,
                 borderRadius = (bone.sprite and bone.sprite:find("round")) and math.min(w, h) / 2 or 3,
                 borderWidth = isSelected and 2 or 0,
                 borderColor = COLORS.boneSelected,
@@ -135,6 +136,12 @@ function BoneFrameEditor.Create(opts)
                     RefreshAll()
                 end,
             }
+            if spriteInfo and spriteInfo.image then
+                panelProps.backgroundImage = spriteInfo.image
+            else
+                panelProps.backgroundColor = color
+            end
+            boneWidgets[#boneWidgets + 1] = UI.Panel(panelProps)
 
             -- 骨骼名标签
             if isSelected then

@@ -7,6 +7,7 @@
 local UI = require("urhox-libs/UI")
 local Config = require("Config")
 local CharRegistry = require("characters.CharRegistry")
+local AssetLibrary = require("data.asset_library")
 
 local M = {}
 
@@ -18,6 +19,53 @@ local renderData_ = {}
 local debugPrinted_ = false
 -- 调试：帧计数
 local frameCount_ = 0
+
+--- 创建 sprite_bone 模式的显示面板（从帧数据中提取主体素材）
+---@param def table art 配置
+---@return Widget
+local function CreateSpriteBonePanel(def)
+    local bgImage = nil
+    local bgColor = {100, 130, 200, 220}
+    local w, h = 48, 64
+
+    -- 从 idle 帧数据的 body 骨骼获取素材
+    if def.frames and def.frames.idle then
+        local bones = def.frames.idle.bones
+        if bones then
+            for _, bone in ipairs(bones) do
+                if bone.id == "body" and bone.sprite then
+                    local info = AssetLibrary.GetSprite(bone.sprite)
+                    if info then
+                        if info.image then
+                            bgImage = info.image
+                            w = info.width or 48
+                            h = info.height or 48
+                        else
+                            bgColor = info.color or bgColor
+                            w = info.width or w
+                            h = info.height or h
+                        end
+                    end
+                    break
+                end
+            end
+        end
+    end
+
+    local props = {
+        width = w,
+        height = h,
+        position = "absolute",
+        left = 0, top = 0,
+        borderRadius = 4,
+    }
+    if bgImage then
+        props.backgroundImage = bgImage
+    else
+        props.backgroundColor = bgColor
+    end
+    return UI.Panel(props)
+end
 
 --- 获取角色的美术配置（从 CharRegistry 模块读取）
 ---@param moduleId string
@@ -90,15 +138,7 @@ function M.CreateSpines(characters)
 
         local spine
         if def.mode == "sprite_bone" then
-            -- sprite_bone 模式：占位色块（后续替换为骨骼渲染）
-            spine = UI.Panel {
-                width = 48,
-                height = 64,
-                position = "absolute",
-                left = 0, top = 0,
-                backgroundColor = {100, 130, 200, 220},
-                borderRadius = 4,
-            }
+            spine = CreateSpriteBonePanel(def)
         else
             spine = UI.Spine {
                 src = def.spineSrc,
@@ -133,24 +173,26 @@ function M.CreateSpines(characters)
         }
         hpBg:AddChild(hpFill)
 
-        -- 应用初始 animSpeed
-        if def.animSpeed and def.animSpeed ~= 1.0 then
-            spine:SetTimeScale(def.animSpeed)
-        end
-
-        -- 应用初始染色
-        if def.tint then
-            spine:SetColor(def.tint.r, def.tint.g, def.tint.b, 1.0)
+        -- Spine 专属初始化
+        if def.mode ~= "sprite_bone" then
+            if def.animSpeed and def.animSpeed ~= 1.0 then
+                spine:SetTimeScale(def.animSpeed)
+            end
+            if def.tint then
+                spine:SetColor(def.tint.r, def.tint.g, def.tint.b, 1.0)
+            end
         end
 
         -- 存储渲染数据（与逻辑数据分离）
         renderData_[char] = {
             spine = spine,
-            currentAnim = def.anims.idle,
+            currentAnim = def.anims and def.anims.idle or nil,
             lastFlip = initFlip,
             hpBar = hpBg,
             hpFill = hpFill,
             tintApplied = def.tint ~= nil,
+            baseWidth = spine.props.width or 48,
+            baseHeight = spine.props.height or 64,
         }
 
         table.insert(children, spine)
@@ -181,13 +223,7 @@ function M.AddOne(char)
 
     local spine
     if def.mode == "sprite_bone" then
-        spine = UI.Panel {
-            width = 48, height = 64,
-            position = "absolute",
-            left = 0, top = 0,
-            backgroundColor = {100, 130, 200, 220},
-            borderRadius = 4,
-        }
+        spine = CreateSpriteBonePanel(def)
     else
         spine = UI.Spine {
             src = def.spineSrc,
@@ -217,20 +253,24 @@ function M.AddOne(char)
     }
     hpBg:AddChild(hpFill)
 
-    if def.animSpeed and def.animSpeed ~= 1.0 then
-        spine:SetTimeScale(def.animSpeed)
-    end
-    if def.tint then
-        spine:SetColor(def.tint.r, def.tint.g, def.tint.b, 1.0)
+    if def.mode ~= "sprite_bone" then
+        if def.animSpeed and def.animSpeed ~= 1.0 then
+            spine:SetTimeScale(def.animSpeed)
+        end
+        if def.tint then
+            spine:SetColor(def.tint.r, def.tint.g, def.tint.b, 1.0)
+        end
     end
 
     renderData_[char] = {
         spine = spine,
-        currentAnim = def.anims.idle,
+        currentAnim = def.anims and def.anims.idle or nil,
         lastFlip = initFlip,
         hpBar = hpBg,
         hpFill = hpFill,
         tintApplied = def.tint ~= nil,
+        baseWidth = spine.props.width or 48,
+        baseHeight = spine.props.height or 64,
     }
 
     spineContainer_:AddChild(spine)
@@ -252,6 +292,8 @@ end
 local function UpdateAnimation(char)
     local rd = renderData_[char]
     if not rd then return end
+    -- sprite_bone 模式无 Spine 组件，跳过动画
+    if not rd.spine.SetAnimation then return end
 
     local def = GetArtDef(char.defId)
     local targetAnim = def.anims[char.animState] or def.anims.idle
@@ -273,12 +315,17 @@ local function UpdateDyingVisual(char)
     if char.state == "dying" then
         local progress = 1.0 - math.max(0, char.deathTimer / Battle.DEATH_DURATION)
         local alpha = 1.0 - progress * 0.8
-        -- 保留 tint 染色
-        local def = GetArtDef(char.defId)
-        local tr = (def.tint and def.tint.r) or 1
-        local tg = (def.tint and def.tint.g) or 1
-        local tb = (def.tint and def.tint.b) or 1
-        rd.spine:SetColor(tr, tg, tb, alpha)
+        if rd.spine.SetColor then
+            -- Spine 模式：保留 tint 染色
+            local def = GetArtDef(char.defId)
+            local tr = (def.tint and def.tint.r) or 1
+            local tg = (def.tint and def.tint.g) or 1
+            local tb = (def.tint and def.tint.b) or 1
+            rd.spine:SetColor(tr, tg, tb, alpha)
+        else
+            -- sprite_bone 模式：透明度淡出
+            rd.spine:SetStyle({ opacity = alpha })
+        end
     elseif char.state == "dead" then
         rd.spine:SetVisible(false)
     end
@@ -419,8 +466,18 @@ function M.Update(characters, camera)
                 si:SetScale(flipSign * info.scaleValX, -info.scaleValY)
             end
         else
-            -- spineInstance 未加载，占位
-            spine:SetStyle({ left = math.floor(info.sx), top = math.floor(info.sy), zIndex = i })
+            -- sprite_bone 模式或 spineInstance 未加载
+            local bw = info.rd.baseWidth or 48
+            local bh = info.rd.baseHeight or 64
+            local targetW = math.max(1, math.floor(bw * info.scaleValX))
+            local targetH = math.max(1, math.floor(bh * info.scaleValY))
+            spine:SetStyle({
+                width = targetW,
+                height = targetH,
+                left = math.floor(info.sx - targetW / 2),
+                top = math.floor(info.sy - targetH),
+                zIndex = i,
+            })
         end
 
         -- 也设置 props.flipX（备份：当 dataW > 0 时 Render 内部会用它）

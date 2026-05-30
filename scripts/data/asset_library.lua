@@ -19,8 +19,10 @@ M.spines = {
 }
 
 --- 精灵素材分类
---- category: head / body / arm / leg / weapon / accessory
+--- category: head / body / arm / leg / weapon / accessory / character
 M.sprites = {
+    -- 角色（图片素材）
+    { id = "bunny", name = "Bunny", category = "character", image = "image/Bunny.png", width = 48, height = 48 },
     -- 头部
     { id = "head_round",   name = "圆头",     category = "head",   color = {220, 180, 140}, width = 24, height = 24 },
     { id = "head_square",  name = "方头",     category = "head",   color = {200, 160, 120}, width = 22, height = 22 },
@@ -81,6 +83,7 @@ end
 
 --- 素材分类列表（用于编辑器 UI）
 M.categories = {
+    { id = "character", name = "角色" },
     { id = "head",      name = "头部" },
     { id = "body",      name = "身体" },
     { id = "arm",       name = "手臂" },
