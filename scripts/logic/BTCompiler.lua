@@ -230,7 +230,7 @@ function M._CompileNode(nodeId, nodes, childrenOf)
                 run = function(task) task:success() end,
             }), nil
         end
-        local taskInstance = BTTaskLibrary.Create(taskName)
+        local taskInstance = BTTaskLibrary.Create(taskName, nodeData.params)
         if not taskInstance then
             return nil, "unknown task: " .. tostring(taskName)
         end

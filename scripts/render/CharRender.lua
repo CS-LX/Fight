@@ -778,4 +778,10 @@ function M.GetSpine(char)
     return rd and rd.spine or nil
 end
 
+--- 获取当前 Spine 容器（供 ProjectileRender 复用）
+---@return Widget|nil
+function M.GetContainer()
+    return spineContainer_
+end
+
 return M

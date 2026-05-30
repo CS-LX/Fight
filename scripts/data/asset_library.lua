@@ -23,6 +23,9 @@ M.spines = {
 M.sprites = {
     -- 角色（图片素材）
     { id = "bunny", name = "Bunny", category = "character", image = "image/Bunny.png", width = 48, height = 48 },
+    { id = "kisaki", name = "Kisaki", category = "character", image = "image/Kisaki.png", width = 48, height = 48 },
+    -- 投射物
+    { id = "coke", name = "Coke Can", category = "projectile", image = "image/Coke.png", width = 24, height = 24 },
     -- 头部
     { id = "head_round",   name = "圆头",     category = "head",   color = {220, 180, 140}, width = 24, height = 24 },
     { id = "head_square",  name = "方头",     category = "head",   color = {200, 160, 120}, width = 22, height = 22 },

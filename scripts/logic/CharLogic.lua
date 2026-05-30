@@ -50,6 +50,7 @@ function M.Create(moduleId, team, spawnPos)
 
         -- AI
         aiProfile = aiProfile,
+        btData = mod and mod.ai.behaviourTree or nil,  -- 角色专属行为树数据
 
         -- 状态（供 AI / 状态机驱动）
         state = "moving",       -- "moving" | "attacking" | "dying" | "dead"

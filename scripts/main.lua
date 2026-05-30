@@ -11,6 +11,7 @@ local CharLogic = require("logic.CharLogic")
 local Battle = require("logic.Battle")
 local AI = require("logic.AI")
 local CharRender = require("render.CharRender")
+local ProjectileRender = require("render.ProjectileRender")
 local GameUI = require("GameUI")
 local DeploymentEditor = require("ui.DeploymentEditor")
 local CharacterMaker = require("ui.CharacterMaker")
@@ -117,6 +118,7 @@ end
 function EnterDeployment()
     -- 清除旧战斗数据
     CharRender.Clear(characters_)
+    ProjectileRender.Clear()
     AI.Clear()
     characters_ = {}
     deployedUnits_ = {}
@@ -310,6 +312,7 @@ end
 function TestBattleFromMaker(moduleId)
     -- 清除旧数据
     CharRender.Clear(characters_)
+    ProjectileRender.Clear()
     AI.Clear()
     characters_ = {}
     deployedUnits_ = {}
@@ -433,6 +436,10 @@ function UpdateGameLogic(dt)
             end
         end
     end
+
+    -- 投射物：收集新发射的 + 更新飞行中的
+    ProjectileRender.Collect(characters_)
+    ProjectileRender.Update(camera_, dt)
 
     -- 表现层更新：Spine 位置/缩放/排序/动画/翻转
     CharRender.Update(characters_, camera_, dt)

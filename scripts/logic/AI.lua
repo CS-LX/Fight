@@ -280,10 +280,20 @@ function M.Update(char, characters, dt)
     -- 攻击动画锁定期间跳过行为树（受击不阻止反击，仅攻击动作需锁定）
     if char.animTimer and char.animTimer > 0 and char.animState == "attack" then return end
 
-    -- 懒创建行为树（优先使用自定义树）
+    -- 懒创建行为树（优先级：编辑器自定义树 > 角色自身树 > 默认树）
     if not trees_[char] then
         if customTreeData_ then
             trees_[char] = CreateCustomTree(char) or CreateTree(char)
+        elseif char.btData then
+            -- 使用角色定义中的专属行为树
+            local tree, err = BTCompiler.Compile(char.btData)
+            if tree then
+                tree.object = { char = char, characters = {}, dt = 0, enemy = nil, enemyDist = 0, profileParams = {} }
+                trees_[char] = tree
+            else
+                print("[AI] Failed to compile char btData for " .. tostring(char.defId) .. ": " .. tostring(err))
+                trees_[char] = CreateTree(char)
+            end
         else
             trees_[char] = CreateTree(char)
         end

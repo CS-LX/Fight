@@ -38,11 +38,12 @@ end
 
 --- 根据名称创建一个 Task 实例
 ---@param name string
+---@param params table|nil 节点级自定义参数（来自树数据的 nodeData.params）
 ---@return table|nil BT.Task instance
-function M.Create(name)
+function M.Create(name, params)
     local info = M.registry[name]
     if info and info.factory then
-        return info.factory()
+        return info.factory(params)
     end
     return nil
 end
@@ -396,11 +397,15 @@ M.Register("EnemyHPLow", {
 M.Register("EnemyClose", {
     category = "condition",
     label = "敌人过近",
-    desc = "敌人距离小于1.5米（贴脸）",
-    factory = function()
+    desc = "敌人距离小于阈值（默认1.5米，可通过params.threshold调整）",
+    paramsSchema = {
+        { key = "threshold", type = "number", default = 1.5, label = "距离阈值" },
+    },
+    factory = function(params)
+        local threshold = (params and params.threshold) or 1.5
         return BT.Task:new({
             run = function(task, ctx)
-                if ctx.enemy and ctx.enemyDist < 1.5 then
+                if ctx.enemy and ctx.enemyDist < threshold then
                     task:success()
                 else
                     task:fail()
@@ -582,8 +587,14 @@ M.Register("Strafe", {
 M.Register("Retreat", {
     category = "action",
     label = "后撤",
-    desc = "短距离后退拉开距离（约1.5米）",
-    factory = function()
+    desc = "后退拉开距离（可配置距离和速度倍率）",
+    paramsSchema = {
+        { key = "distance", type = "number", default = 1.5, label = "后撤距离" },
+        { key = "speedMul", type = "number", default = 1.2, label = "速度倍率" },
+    },
+    factory = function(params)
+        local retreatDist = (params and params.distance) or 1.5
+        local speedMul = (params and params.speedMul) or 1.2
         return BT.Task:new({
             start = function(task)
                 task.retreated = 0
@@ -593,7 +604,7 @@ M.Register("Retreat", {
                 local enemy = ctx.enemy
                 if not enemy then task:fail() return end
 
-                if task.retreated >= 1.5 then
+                if task.retreated >= retreatDist then
                     task:success()
                     return
                 end
@@ -603,7 +614,7 @@ M.Register("Retreat", {
                 local dist = math.sqrt(dx * dx + dz * dz)
                 if dist < 0.01 then dist = 0.01 end
 
-                local speed = char.speed * 1.2
+                local speed = char.speed * speedMul
                 local step = speed * ctx.dt
                 local newX = char.worldPos.x + (dx / dist) * step
                 local newZ = char.worldPos.z + (dz / dist) * step
@@ -698,6 +709,66 @@ M.Register("Rally", {
                 char.state = "moving"
                 char.animState = "move"
                 task:running()
+            end,
+        })
+    end,
+})
+
+--- 远程攻击（通过 params 配置子弹和特效）
+M.Register("RangedAttack", {
+    category = "action",
+    label = "远程攻击",
+    desc = "发射投射物攻击目标（子弹/特效通过 params 配置）",
+    paramsSchema = {
+        { key = "bulletSpeed", type = "number", default = 10, label = "子弹速度" },
+        { key = "bulletEffect", type = "string", default = "", label = "子弹特效" },
+        { key = "muzzleEffect", type = "string", default = "", label = "枪口特效" },
+        { key = "hitEffect", type = "string", default = "", label = "命中特效" },
+        { key = "bulletColor", type = "string", default = "#ffff00", label = "子弹颜色" },
+        { key = "damageMultiplier", type = "number", default = 1.0, label = "伤害倍率" },
+    },
+    factory = function(params)
+        params = params or {}
+        local bulletSpeed = params.bulletSpeed or 10
+        local bulletEffect = params.bulletEffect or ""
+        local muzzleEffect = params.muzzleEffect or ""
+        local hitEffect = params.hitEffect or ""
+        local bulletColor = params.bulletColor or "#ffff00"
+        local damageMul = params.damageMultiplier or 1.0
+
+        return BT.Task:new({
+            run = function(task, ctx)
+                local char = ctx.char
+                local enemy = ctx.enemy
+                if not enemy or enemy.state == "dead" or enemy.state == "dying" then
+                    task:fail()
+                    return
+                end
+
+                -- 面朝敌人
+                local dx = enemy.worldPos.x - char.worldPos.x
+                char.facingRight = (dx > 0)
+                char.state = "attacking"
+                char.animState = "attack"
+
+                if char.attackCooldown <= 0 then
+                    -- 发射投射物（存入角色的 projectiles 列表，由渲染层消费）
+                    if not char.projectiles then char.projectiles = {} end
+                    char.projectiles[#char.projectiles + 1] = {
+                        fromPos = Vector3(char.worldPos.x, char.worldPos.y + 1.0, char.worldPos.z),
+                        targetChar = enemy,
+                        speed = bulletSpeed,
+                        bulletEffect = bulletEffect,
+                        muzzleEffect = muzzleEffect,
+                        hitEffect = hitEffect,
+                        bulletColor = bulletColor,
+                        damage = (char.attackDamage or 10) * damageMul,
+                    }
+
+                    local cooldownMul = ctx.profileParams and ctx.profileParams.cooldownMul or 1.0
+                    char.attackCooldown = char.attackCooldownMax * cooldownMul
+                end
+                task:success()
             end,
         })
     end,

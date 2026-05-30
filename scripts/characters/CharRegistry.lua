@@ -176,6 +176,153 @@ local function CreateBloodyWolfPreset()
     }
 end
 
+--- Kisaki 预设（远程投掷手 - 扔可乐罐）
+local function CreateKisakiPreset()
+    return {
+        id = "kisaki",
+        name = "Kisaki",
+        config = {
+            baseSpeed = 2.2,       -- 中等偏慢（需要保持距离，不需要太快）
+            baseHP = 100,          -- 中等血量（比刺客厚但不算肉）
+            attackDamage = 10,     -- 单次伤害偏低（远程安全输出补偿）
+            attackRange = 3.5,     -- 远程攻击距离
+            attackCooldown = 1.2,  -- 冷却较长（投掷需要准备动作）
+            stopDistance = 2.8,    -- 保持安全距离不贴脸
+            collisionRadius = 0.3, -- 小体型
+        },
+        art = {
+            mode = "sprite_bone",
+            avatar = "image/Kisaki.png",
+            renderScale = 1.6,
+            frames = {
+                -- 待机：小人抱着可乐罐轻微晃动
+                idle = {
+                    duration = 1.6,
+                    bones = { { id = "body", sprite = "kisaki", pivotX = 0, pivotY = 0 } },
+                    keyframes = {
+                        ["0"]   = { body = { x = 0, y = 0,  rot = 0,  scaleX = 1.0,  scaleY = 1.0 } },
+                        ["0.4"] = { body = { x = 0, y = -2, rot = 2,  scaleX = 1.0,  scaleY = 1.02 } },
+                        ["0.8"] = { body = { x = 0, y = 0,  rot = 0,  scaleX = 1.0,  scaleY = 1.0 } },
+                        ["1.2"] = { body = { x = 0, y = -2, rot = -2, scaleX = 1.0,  scaleY = 1.02 } },
+                        ["1.6"] = { body = { x = 0, y = 0,  rot = 0,  scaleX = 1.0,  scaleY = 1.0 } },
+                    },
+                },
+                -- 移动：小碎步跑动（轻盈弹跳）
+                move = {
+                    duration = 0.45,
+                    bones = { { id = "body", sprite = "kisaki", pivotX = 0, pivotY = 0 } },
+                    keyframes = {
+                        ["0"]    = { body = { x = 0, y = 0,   rot = -3, scaleX = 1.02, scaleY = 0.95 } },
+                        ["0.12"] = { body = { x = 0, y = -6,  rot = 3,  scaleX = 0.95, scaleY = 1.08 } },
+                        ["0.22"] = { body = { x = 0, y = 0,   rot = 3,  scaleX = 1.04, scaleY = 0.92 } },
+                        ["0.34"] = { body = { x = 0, y = -5,  rot = -2, scaleX = 0.96, scaleY = 1.06 } },
+                        ["0.45"] = { body = { x = 0, y = 0,   rot = -3, scaleX = 1.02, scaleY = 0.95 } },
+                    },
+                },
+                -- 攻击：投掷动作（后仰蓄力 → 前倾甩出）
+                attack = {
+                    duration = 0.7,
+                    bones = { { id = "body", sprite = "kisaki", pivotX = 0, pivotY = 0 } },
+                    keyframes = {
+                        ["0"]   = { body = { x = 0,  y = 0,  rot = 0,   scaleX = 1.0,  scaleY = 1.0 } },
+                        ["0.2"] = { body = { x = -6, y = -2, rot = -15, scaleX = 1.05, scaleY = 0.92 } },
+                        ["0.35"]= { body = { x = 8,  y = -4, rot = 20,  scaleX = 0.9,  scaleY = 1.1 } },
+                        ["0.5"] = { body = { x = 4,  y = 0,  rot = 8,   scaleX = 1.02, scaleY = 0.98 } },
+                        ["0.7"] = { body = { x = 0,  y = 0,  rot = 0,   scaleX = 1.0,  scaleY = 1.0 } },
+                    },
+                },
+                -- 受击：向后弹开晃动
+                hit = {
+                    duration = 0.4,
+                    bones = { { id = "body", sprite = "kisaki", pivotX = 0, pivotY = 0 } },
+                    keyframes = {
+                        ["0"]   = { body = { x = 0,  y = 0, rot = 0,   scaleX = 1.0,  scaleY = 1.0 } },
+                        ["0.1"] = { body = { x = -6, y = 0, rot = -10, scaleX = 1.08, scaleY = 0.92 } },
+                        ["0.2"] = { body = { x = 3,  y = 0, rot = 6,   scaleX = 0.96, scaleY = 1.04 } },
+                        ["0.3"] = { body = { x = -1, y = 0, rot = -2,  scaleX = 1.02, scaleY = 0.98 } },
+                        ["0.4"] = { body = { x = 0,  y = 0, rot = 0,   scaleX = 1.0,  scaleY = 1.0 } },
+                    },
+                },
+                -- 死亡：向后倒下
+                die = {
+                    duration = 0.8,
+                    bones = { { id = "body", sprite = "kisaki", pivotX = 0, pivotY = 0 } },
+                    keyframes = {
+                        ["0"]   = { body = { x = 0, y = 0, rot = 0,   scaleX = 1.0, scaleY = 1.0 } },
+                        ["0.3"] = { body = { x = -2, y = 2, rot = -25, scaleX = 1.1, scaleY = 0.85 } },
+                        ["0.6"] = { body = { x = -4, y = 4, rot = -60, scaleX = 1.3, scaleY = 0.6 } },
+                        ["0.8"] = { body = { x = -5, y = 5, rot = -80, scaleX = 1.4, scaleY = 0.5 } },
+                    },
+                },
+                -- 放松：左右摇晃哼歌
+                relax = {
+                    duration = 2.0,
+                    bones = { { id = "body", sprite = "kisaki", pivotX = 0, pivotY = 0 } },
+                    keyframes = {
+                        ["0"]   = { body = { x = 0, y = 0,  rot = 0,  scaleX = 1.0,  scaleY = 1.0 } },
+                        ["0.5"] = { body = { x = 2, y = -1, rot = 4,  scaleX = 1.0,  scaleY = 1.01 } },
+                        ["1.0"] = { body = { x = 0, y = 0,  rot = 0,  scaleX = 1.0,  scaleY = 1.0 } },
+                        ["1.5"] = { body = { x = -2, y = -1, rot = -4, scaleX = 1.0,  scaleY = 1.01 } },
+                        ["2.0"] = { body = { x = 0, y = 0,  rot = 0,  scaleX = 1.0,  scaleY = 1.0 } },
+                    },
+                },
+            },
+        },
+        ai = {
+            profile = "balanced",
+            behaviourTree = {
+                rootId = "node_1",
+                nodes = {
+                    node_1 = { id = "node_1", type = "ActivePriority", name = "根优先级" },
+                    -- 优先级1: 敌人太近时快速逃跑（远程角色需要大范围感知 + 高速撤退）
+                    node_2 = { id = "node_2", type = "Sequence", name = "快速逃跑序列" },
+                    node_2a = { id = "node_2a", type = "Task", taskName = "HasEnemy" },
+                    node_2b = { id = "node_2b", type = "Task", taskName = "EnemyClose",
+                        params = { threshold = 2.5 },  -- 远程角色警戒距离更大
+                    },
+                    node_2c = { id = "node_2c", type = "Task", taskName = "Retreat",
+                        params = { distance = 3.0, speedMul = 1.8 },  -- 大幅后撤 + 加速逃跑
+                    },
+                    -- 优先级2: 在射程内远程攻击
+                    node_3 = { id = "node_3", type = "Sequence", name = "远程攻击序列" },
+                    node_3a = { id = "node_3a", type = "Task", taskName = "HasEnemy" },
+                    node_3b = { id = "node_3b", type = "Task", taskName = "InAttackRange" },
+                    node_3c = { id = "node_3c", type = "Task", taskName = "RangedAttack",
+                        params = {
+                            bulletSpeed = 8,
+                            bulletEffect = "image/Coke.png",
+                            hitEffect = "",
+                            muzzleEffect = "",
+                            bulletColor = "#1a5276",
+                            damageMultiplier = 1.0,
+                        },
+                    },
+                    -- 优先级3: 追击到射程
+                    node_4 = { id = "node_4", type = "Sequence", name = "追击序列" },
+                    node_4a = { id = "node_4a", type = "Task", taskName = "HasEnemy" },
+                    node_4b = { id = "node_4b", type = "Task", taskName = "Chase" },
+                    -- 优先级4: 无事巡逻
+                    node_5 = { id = "node_5", type = "Task", taskName = "Patrol" },
+                },
+                edges = {
+                    { from = "node_1", to = "node_2", order = 1 },
+                    { from = "node_1", to = "node_3", order = 2 },
+                    { from = "node_1", to = "node_4", order = 3 },
+                    { from = "node_1", to = "node_5", order = 4 },
+                    { from = "node_2", to = "node_2a", order = 1 },
+                    { from = "node_2", to = "node_2b", order = 2 },
+                    { from = "node_2", to = "node_2c", order = 3 },
+                    { from = "node_3", to = "node_3a", order = 1 },
+                    { from = "node_3", to = "node_3b", order = 2 },
+                    { from = "node_3", to = "node_3c", order = 3 },
+                    { from = "node_4", to = "node_4a", order = 1 },
+                    { from = "node_4", to = "node_4b", order = 2 },
+                },
+            },
+        },
+    }
+end
+
 -- ============================================================================
 -- 公开接口
 -- ============================================================================
@@ -191,6 +338,9 @@ function M.Init()
 
     local bloodyWolf = CreateBloodyWolfPreset()
     M.Register(bloodyWolf, true)
+
+    local kisaki = CreateKisakiPreset()
+    M.Register(kisaki, true)
 
     -- 恢复持久化的自定义角色
     local saved = CharPersist.LoadAll()
