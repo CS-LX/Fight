@@ -254,7 +254,9 @@ M.Register("Chase", {
                 local newX = char.worldPos.x + dx * invDist * speed * ctx.dt
                 local newZ = char.worldPos.z + dz * invDist * speed * ctx.dt
                 char.worldPos = ClampToArena(Vector3(newX, char.worldPos.y, newZ))
-                char.facingRight = (dx > 0)
+                if math.abs(dx) > 0.2 then
+                    char.facingRight = (dx > 0)
+                end
                 char.state = "moving"
                 char.animState = "move"
                 task:running()
@@ -271,13 +273,17 @@ M.Register("Patrol", {
         return BT.Task:new({
             start = function(task, ctx)
                 local char = ctx.char
-                local halfW = Config.ArenaWidth * 0.5 - 1
-                local halfD = Config.ArenaDepth * 0.5 - 1
-                task.patrolTarget = Vector3(
-                    math.random() * halfW * 2 - halfW,
-                    char.worldPos.y,
-                    math.random() * halfD * 2 - halfD
-                )
+                -- 复用角色身上未到达的巡逻目标，避免每次重启都换方向
+                if not char._patrolTarget then
+                    local halfW = Config.ArenaWidth * 0.5 - 1
+                    local halfD = Config.ArenaDepth * 0.5 - 1
+                    char._patrolTarget = Vector3(
+                        math.random() * halfW * 2 - halfW,
+                        char.worldPos.y,
+                        math.random() * halfD * 2 - halfD
+                    )
+                end
+                task.patrolTarget = char._patrolTarget
             end,
             run = function(task, ctx)
                 local char = ctx.char
@@ -286,6 +292,7 @@ M.Register("Patrol", {
                 local dz = target.z - char.worldPos.z
                 local dist = math.sqrt(dx * dx + dz * dz)
                 if dist < 0.5 then
+                    char._patrolTarget = nil  -- 到达后清除，下次选新目标
                     char.state = "idle"
                     char.animState = "idle"
                     task:success()
@@ -296,7 +303,9 @@ M.Register("Patrol", {
                 local newX = char.worldPos.x + dx * invDist * speed * ctx.dt
                 local newZ = char.worldPos.z + dz * invDist * speed * ctx.dt
                 char.worldPos = ClampToArena(Vector3(newX, char.worldPos.y, newZ))
-                char.facingRight = (dx > 0)
+                if math.abs(dx) > 0.3 then
+                    char.facingRight = (dx > 0)
+                end
                 char.state = "moving"
                 char.animState = "move"
                 task:running()

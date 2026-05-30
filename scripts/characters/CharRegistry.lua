@@ -23,6 +23,7 @@ local PRESET_FILES = {
     "char_defs/bloody_wolf.json",
     "char_defs/kisaki.json",
     "char_defs/originium_slug.json",
+    "char_defs/doro.json",
 }
 
 -- ============================================================================

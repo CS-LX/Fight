@@ -28,6 +28,7 @@ M.spines = {
 --- category: head / body / arm / leg / weapon / accessory / character
 M.sprites = {
     -- 角色（图片素材）
+    { id = "doro", name = "Doro", category = "character", image = "image/doro_final.png", width = 48, height = 48 },
     { id = "bunny", name = "Bunny", category = "character", image = "image/Bunny.png", width = 48, height = 48 },
     { id = "kisaki", name = "小咲", category = "character", image = "image/Kisaki.png", width = 48, height = 48 },
     { id = "kisaki_nocoke", name = "小咲 (No Coke)", category = "character", image = "image/Kisaki_NoCoke.png", width = 48, height = 48 },
