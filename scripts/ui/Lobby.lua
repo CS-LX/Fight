@@ -45,6 +45,8 @@ local isOpen_ = false
 local root_ = nil
 ---@type Widget|nil
 local balanceLabel_ = nil
+---@type Widget|nil
+local crystalLabel_ = nil
 
 --- 回调
 ---@type {onBattle: function, onRanked: function, onSpectate: function, onMaker: function}|nil
@@ -77,6 +79,7 @@ function M.Close()
         UI.SetRoot(nil)
         root_ = nil
         balanceLabel_ = nil
+        crystalLabel_ = nil
     end
 end
 
@@ -91,6 +94,9 @@ function M.RefreshBalance()
     if balanceLabel_ then
         balanceLabel_:SetText(tostring(Economy.GetBalance()))
     end
+    if crystalLabel_ then
+        crystalLabel_:SetText(tostring(Economy.GetCrystal()))
+    end
 end
 
 -- ============================================================================
@@ -104,6 +110,14 @@ function M.BuildUI()
         fontSize = 14,
         fontWeight = "bold",
         fontColor = COLORS.gold,
+    }
+
+    -- 创造晶余额标签
+    crystalLabel_ = UI.Label {
+        text = tostring(Economy.GetCrystal()),
+        fontSize = 14,
+        fontWeight = "bold",
+        fontColor = { 180, 120, 255, 255 },  -- 紫色代表创造晶
     }
 
     -- 段位信息
@@ -148,18 +162,40 @@ function M.BuildUI()
                     },
                 },
             },
-            -- 右侧：金币
+            -- 右侧：金币 + 创造晶
             UI.Panel {
                 flexDirection = "row",
                 alignItems = "center",
+                gap = 14,
                 children = {
-                    UI.Label {
-                        text = "GOLD",
-                        fontSize = 10,
-                        fontColor = COLORS.textMuted,
-                        marginRight = 6,
+                    -- 创造晶
+                    UI.Panel {
+                        flexDirection = "row",
+                        alignItems = "center",
+                        children = {
+                            UI.Label {
+                                text = "◆",
+                                fontSize = 10,
+                                fontColor = { 180, 120, 255, 255 },
+                                marginRight = 3,
+                            },
+                            crystalLabel_,
+                        },
                     },
-                    balanceLabel_,
+                    -- 金币
+                    UI.Panel {
+                        flexDirection = "row",
+                        alignItems = "center",
+                        children = {
+                            UI.Label {
+                                text = "GOLD",
+                                fontSize = 10,
+                                fontColor = COLORS.textMuted,
+                                marginRight = 6,
+                            },
+                            balanceLabel_,
+                        },
+                    },
                 },
             },
         },

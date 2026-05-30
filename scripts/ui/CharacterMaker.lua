@@ -51,19 +51,91 @@ local phaseSwitchApi_ = nil     -- PillToggle API (phase)
 -- 外部回调
 local onClose_ = nil
 local onTestBattle_ = nil
+-- 创建模式标志（首次保存时需要扣晶确认）
+local createMode_ = false
+local createConfirmed_ = false
 
 -- ============================================================================
--- 子面板数据引用（属性面板控件）
+-- 子面板数据引用（属性面板控件）- 100点池系统
 -- ============================================================================
 local attr_nameField_ = nil
-local attr_speedSlider_ = nil
-local attr_hpSlider_ = nil
-local attr_damageSlider_ = nil
-local attr_rangeSlider_ = nil
+-- 点数池滑条（4核心属性共享100点）
+local attr_hpPtsSlider_ = nil
+local attr_atkPtsSlider_ = nil
+local attr_spdPtsSlider_ = nil
+local attr_rngPtsSlider_ = nil
+-- 点数池显示标签
+local attr_remainLabel_ = nil
+local attr_hpValLabel_ = nil
+local attr_atkValLabel_ = nil
+local attr_spdValLabel_ = nil
+local attr_rngValLabel_ = nil
+-- 辅助属性（不占点数）
 local attr_cooldownSlider_ = nil
 local attr_stopDistSlider_ = nil
 local attr_collisionRadiusSlider_ = nil
 local attr_scaleSlider_ = nil
+
+-- 点数池常量
+local POOL_TOTAL = 100
+local POOL_MIN = 5
+local POOL_MAX = 55
+local POOL_DEFAULT = 25
+
+-- 点数→实值转换
+local function PtsToHP(pts)     return math.floor(pts * 4) end
+local function PtsToATK(pts)    return math.floor(pts * 0.4 * 10 + 0.5) / 10 end
+local function PtsToSPD(pts)    return math.floor(pts * 0.1 * 10 + 0.5) / 10 end
+local function PtsToRange(pts)  return math.floor(pts * 0.048 * 100 + 0.5) / 100 end
+
+-- 实值→点数反算（edit模式加载已有角色）
+local function HPToPts(hp)      return math.max(POOL_MIN, math.min(POOL_MAX, math.floor(hp / 4 + 0.5))) end
+local function ATKToPts(atk)    return math.max(POOL_MIN, math.min(POOL_MAX, math.floor(atk / 0.4 + 0.5))) end
+local function SPDToPts(spd)    return math.max(POOL_MIN, math.min(POOL_MAX, math.floor(spd / 0.1 + 0.5))) end
+local function RangeToPts(rng)  return math.max(POOL_MIN, math.min(POOL_MAX, math.floor(rng / 0.048 + 0.5))) end
+
+-- 获取当前已用点数
+local function GetUsedPoints()
+    if not attr_hpPtsSlider_ then return POOL_TOTAL end
+    return attr_hpPtsSlider_:GetValue()
+         + attr_atkPtsSlider_:GetValue()
+         + attr_spdPtsSlider_:GetValue()
+         + attr_rngPtsSlider_:GetValue()
+end
+
+-- 刷新剩余点数显示和实值标签
+local function RefreshPoolDisplay()
+    local used = GetUsedPoints()
+    local remain = POOL_TOTAL - used
+    if attr_remainLabel_ then
+        local color = remain >= 0 and {100, 255, 100, 255} or {255, 80, 80, 255}
+        attr_remainLabel_:SetText(string.format("剩余点数: %d / %d", remain, POOL_TOTAL))
+        attr_remainLabel_:SetFontColor(color)
+    end
+    if attr_hpValLabel_ then
+        attr_hpValLabel_:SetText(string.format("= %d HP", PtsToHP(attr_hpPtsSlider_:GetValue())))
+    end
+    if attr_atkValLabel_ then
+        attr_atkValLabel_:SetText(string.format("= %.1f DMG", PtsToATK(attr_atkPtsSlider_:GetValue())))
+    end
+    if attr_spdValLabel_ then
+        attr_spdValLabel_:SetText(string.format("= %.1f m/s", PtsToSPD(attr_spdPtsSlider_:GetValue())))
+    end
+    if attr_rngValLabel_ then
+        attr_rngValLabel_:SetText(string.format("= %.2f m", PtsToRange(attr_rngPtsSlider_:GetValue())))
+    end
+end
+
+-- 点数池滑条 onChange（限制总和不超100）
+local function OnPoolSliderChange(self, newVal)
+    local used = GetUsedPoints()
+    if used > POOL_TOTAL then
+        -- 超限：回退到允许的最大值
+        local overflow = used - POOL_TOTAL
+        self:SetValue(newVal - overflow)
+    end
+    RefreshPoolDisplay()
+end
 
 -- 外观面板控件
 local app_sliderR_ = nil
@@ -127,14 +199,20 @@ local function UpdateSummary()
     ))
 end
 
---- 从属性面板读取 config
+--- 从属性面板读取 config（100点池系统）
 local function ReadConfigFromUI()
-    if not attr_speedSlider_ then return nil end
+    if not attr_hpPtsSlider_ then return nil end
+    -- 验证点数不超限
+    local used = GetUsedPoints()
+    if used > POOL_TOTAL then
+        UI.Toast { text = "属性点数超出上限！请调整", duration = 2500 }
+        return nil
+    end
     return {
-        baseSpeed = attr_speedSlider_:GetValue() * 0.1,
-        baseHP = attr_hpSlider_:GetValue(),
-        attackDamage = attr_damageSlider_:GetValue(),
-        attackRange = attr_rangeSlider_:GetValue() * 0.1,
+        baseSpeed = PtsToSPD(attr_spdPtsSlider_:GetValue()),
+        baseHP = PtsToHP(attr_hpPtsSlider_:GetValue()),
+        attackDamage = PtsToATK(attr_atkPtsSlider_:GetValue()),
+        attackRange = PtsToRange(attr_rngPtsSlider_:GetValue()),
         attackCooldown = attr_cooldownSlider_:GetValue() * 0.1,
         stopDistance = attr_stopDistSlider_:GetValue() * 0.1,
         collisionRadius = attr_collisionRadiusSlider_:GetValue() * 0.01,
@@ -417,22 +495,80 @@ local function CreateAppearancePanel(art)
     }
 end
 
---- 创建属性面板 Widget
+--- 创建属性面板 Widget（100点池系统）
 local function CreateAttributesPanel(mod)
     local c = mod.config
+
+    -- 反算已有属性→点数
+    local hpPts  = HPToPts(c.baseHP)
+    local atkPts = ATKToPts(c.attackDamage)
+    local spdPts = SPDToPts(c.baseSpeed)
+    local rngPts = RangeToPts(c.attackRange)
+    -- 如果反算总和超100，按比例缩放
+    local total = hpPts + atkPts + spdPts + rngPts
+    if total > POOL_TOTAL then
+        local scale = POOL_TOTAL / total
+        hpPts  = math.max(POOL_MIN, math.floor(hpPts * scale))
+        atkPts = math.max(POOL_MIN, math.floor(atkPts * scale))
+        spdPts = math.max(POOL_MIN, math.floor(spdPts * scale))
+        rngPts = POOL_TOTAL - hpPts - atkPts - spdPts
+        rngPts = math.max(POOL_MIN, rngPts)
+    end
+
     attr_nameField_ = UI.TextField {
         value = mod.name,
         placeholder = "角色名称",
         width = "100%", fontSize = 14,
     }
-    attr_speedSlider_ = UI.Slider { value = math.floor(c.baseSpeed * 10 + 0.5), min = 10, max = 50, step = 1, width = "100%" }
-    attr_hpSlider_ = UI.Slider { value = c.baseHP, min = 50, max = 300, step = 10, width = "100%" }
-    attr_damageSlider_ = UI.Slider { value = c.attackDamage, min = 5, max = 50, step = 1, width = "100%" }
-    attr_rangeSlider_ = UI.Slider { value = math.floor(c.attackRange * 10 + 0.5), min = 8, max = 25, step = 1, width = "100%" }
+
+    -- 剩余点数标签
+    attr_remainLabel_ = UI.Label {
+        text = "",
+        fontSize = 14,
+        fontWeight = "bold",
+        fontColor = { 100, 255, 100, 255 },
+        width = "100%",
+        textAlign = "center",
+        marginBottom = 4,
+    }
+
+    -- 实值标签
+    attr_hpValLabel_  = UI.Label { text = "", fontSize = 11, fontColor = {255, 180, 80, 255} }
+    attr_atkValLabel_ = UI.Label { text = "", fontSize = 11, fontColor = {255, 100, 100, 255} }
+    attr_spdValLabel_ = UI.Label { text = "", fontSize = 11, fontColor = {100, 200, 255, 255} }
+    attr_rngValLabel_ = UI.Label { text = "", fontSize = 11, fontColor = {180, 255, 150, 255} }
+
+    -- 核心属性滑条（共享100点池）
+    attr_hpPtsSlider_  = UI.Slider { value = hpPts,  min = POOL_MIN, max = POOL_MAX, step = 1, width = "100%", onChange = OnPoolSliderChange }
+    attr_atkPtsSlider_ = UI.Slider { value = atkPts, min = POOL_MIN, max = POOL_MAX, step = 1, width = "100%", onChange = OnPoolSliderChange }
+    attr_spdPtsSlider_ = UI.Slider { value = spdPts, min = POOL_MIN, max = POOL_MAX, step = 1, width = "100%", onChange = OnPoolSliderChange }
+    attr_rngPtsSlider_ = UI.Slider { value = rngPts, min = POOL_MIN, max = POOL_MAX, step = 1, width = "100%", onChange = OnPoolSliderChange }
+
+    -- 辅助属性（不占点数）
     attr_cooldownSlider_ = UI.Slider { value = math.floor(c.attackCooldown * 10 + 0.5), min = 3, max = 20, step = 1, width = "100%" }
     attr_stopDistSlider_ = UI.Slider { value = math.floor((c.stopDistance or 0.6) * 10 + 0.5), min = 2, max = 15, step = 1, width = "100%" }
     attr_collisionRadiusSlider_ = UI.Slider { value = math.floor((c.collisionRadius or 0.4) * 100 + 0.5), min = 10, max = 80, step = 1, width = "100%" }
     attr_scaleSlider_ = UI.Slider { value = math.floor(mod.art.renderScale * 100 + 0.5), min = 10, max = 60, step = 1, width = "100%" }
+
+    -- 初始化显示
+    RefreshPoolDisplay()
+
+    -- 构建属性行（标签+滑条+实值）
+    local function AttrRow(label, slider, valLabel, color)
+        return UI.Panel {
+            width = "100%", gap = 2,
+            children = {
+                UI.Panel {
+                    width = "100%", flexDirection = "row", justifyContent = "space-between", alignItems = "center",
+                    children = {
+                        UI.Label { text = label, fontSize = 12, fontColor = color },
+                        valLabel,
+                    },
+                },
+                slider,
+            },
+        }
+    end
 
     return UI.Panel {
         width = "100%", height = "100%",
@@ -452,15 +588,19 @@ local function CreateAttributesPanel(mod)
                         children = {
                             SectionLabel("── 基本信息 ──"),
                             PropLabel("名称"), attr_nameField_,
-                            SectionLabel("── 战斗属性 ──"),
-                            PropLabel("移动速度 (×0.1 m/s)"), attr_speedSlider_,
-                            PropLabel("最大血量"), attr_hpSlider_,
-                            PropLabel("攻击伤害"), attr_damageSlider_,
-                            PropLabel("攻击范围 (×0.1 m)"), attr_rangeSlider_,
+
+                            SectionLabel("── 属性点分配 (共100点) ──"),
+                            attr_remainLabel_,
+                            AttrRow("❤ 生命力", attr_hpPtsSlider_, attr_hpValLabel_, {255, 180, 80, 255}),
+                            AttrRow("⚔ 攻击力", attr_atkPtsSlider_, attr_atkValLabel_, {255, 100, 100, 255}),
+                            AttrRow("💨 速度", attr_spdPtsSlider_, attr_spdValLabel_, {100, 200, 255, 255}),
+                            AttrRow("🎯 射程", attr_rngPtsSlider_, attr_rngValLabel_, {180, 255, 150, 255}),
+
+                            SectionLabel("── 辅助参数 ──"),
                             PropLabel("攻击冷却 (×0.1 s)"), attr_cooldownSlider_,
-                            SectionLabel("── 距离判定 ──"),
                             PropLabel("停止距离 (×0.1 m)"), attr_stopDistSlider_,
                             PropLabel("碰撞半径 (×0.01 m)"), attr_collisionRadiusSlider_,
+
                             SectionLabel("── 渲染 ──"),
                             PropLabel("角色缩放 (×0.01)"), attr_scaleSlider_,
                         },
@@ -508,9 +648,22 @@ local function CreateBehaviourPanel()
         end,
     }
 
+    -- UGC 行为树节点数上限
+    local BT_NODE_LIMIT = 12
+
     local palette = BTNodePalette.Create({
         width = 150,
         onAddNode = function(nodeType, taskName)
+            -- 节点数上限检查
+            local nodeCount = 0
+            if canvas.nodes_ then
+                for _ in pairs(canvas.nodes_) do nodeCount = nodeCount + 1 end
+            end
+            if nodeCount >= BT_NODE_LIMIT then
+                UI.Toast { text = string.format("节点数已达上限 (%d)", BT_NODE_LIMIT), duration = 2000 }
+                return
+            end
+
             local layout = canvas:GetAbsoluteLayout()
             local cx, cy = 0, 0
             if layout then
@@ -615,8 +768,8 @@ end
 -- 工具栏动作
 -- ============================================================================
 
---- 保存角色（整合所有子面板数据）
-local function DoSave()
+--- 内部保存逻辑（不含扣晶确认）
+local function DoSaveInternal()
     local mod = CharRegistry.Get(editModuleId_)
     if not mod then
         print("[CharacterMaker] No module to save: " .. tostring(editModuleId_))
@@ -679,6 +832,92 @@ local function DoSave()
         UI.Toast { text = "保存失败: " .. tostring(err), duration = 3000 }
         return false
     end
+end
+
+--- 保存角色（含创建模式扣晶确认）
+local confirmModal_ = nil
+local function DoSave()
+    -- 编辑模式或已确认：直接保存
+    if not createMode_ or createConfirmed_ then
+        return DoSaveInternal()
+    end
+
+    -- 创建模式首次保存：弹出扣晶确认
+    local Economy = require("economy.Economy")
+    local cost = Economy.Config.UGC_CREATE_COST
+    local balance = Economy.GetCrystal()
+
+    if balance < cost then
+        UI.Toast { text = string.format("创造晶不足！需要 %d◆，当前 %d◆", cost, balance), duration = 3000 }
+        return false
+    end
+
+    -- 确认弹窗
+    if confirmModal_ then confirmModal_:Close() end
+    confirmModal_ = UI.Modal {
+        title = "确认创建角色",
+        size = "sm",
+        onClose = function(self) self:Close() end,
+        children = {
+            UI.Panel {
+                width = "100%", alignItems = "center", gap = 12, padding = 16,
+                children = {
+                    UI.Label {
+                        text = string.format("消耗 %d ◆ 创造晶", cost),
+                        fontSize = 16,
+                        fontWeight = "bold",
+                        fontColor = { 180, 120, 255, 255 },
+                    },
+                    UI.Label {
+                        text = string.format("当前余额: %d ◆", balance),
+                        fontSize = 12,
+                        fontColor = { 160, 160, 192, 255 },
+                    },
+                    UI.Label {
+                        text = "角色将永久入库，可在对战中部署",
+                        fontSize = 11,
+                        fontColor = { 140, 140, 160, 255 },
+                    },
+                    UI.Panel {
+                        width = "100%", flexDirection = "row", justifyContent = "center", gap = 16, marginTop = 8,
+                        children = {
+                            UI.Button {
+                                text = "取消",
+                                variant = "outlined",
+                                size = "small",
+                                onClick = function()
+                                    confirmModal_:Close()
+                                end,
+                            },
+                            UI.Button {
+                                text = "确认创建 (-" .. cost .. "◆)",
+                                variant = "primary",
+                                size = "small",
+                                backgroundColor = { 108, 92, 231, 255 },
+                                onClick = function()
+                                    confirmModal_:Close()
+                                    -- 扣晶
+                                    local success = Economy.SpendCrystalForUGC()
+                                    if not success then
+                                        UI.Toast { text = "扣费失败", duration = 2000 }
+                                        return
+                                    end
+                                    -- 标记已确认，后续保存不再弹窗
+                                    createConfirmed_ = true
+                                    createMode_ = false
+                                    -- 执行保存
+                                    DoSaveInternal()
+                                    UI.Toast { text = "角色创建成功！已扣除 " .. cost .. "◆", duration = 3000 }
+                                end,
+                            },
+                        },
+                    },
+                },
+            },
+        },
+    }
+    confirmModal_:Open()
+    return false  -- 等待用户确认
 end
 
 --- 导出 JSON - 弹窗展示可复制文本
@@ -814,12 +1053,27 @@ end
 -- ============================================================================
 
 --- 打开角色制作器
----@param opts { moduleId: string|nil, onClose: function|nil, onTestBattle: function|nil }
+---@param opts { moduleId: string|nil, mode: string|nil, editId: string|nil, onClose: function|nil, onTestBattle: function|nil }
 function M.Open(opts)
     opts = opts or {}
     if visible_ then M.Close() end
 
-    editModuleId_ = opts.moduleId or CharRegistry.GetCurrentId() or "wisdel"
+    -- 模式处理: "create" 新建 / "edit" 编辑已有
+    local mode = opts.mode or "edit"
+    if mode == "create" then
+        -- 创建新角色
+        createMode_ = true
+        createConfirmed_ = false
+        local newId = "custom_" .. os.time()
+        local newMod = CharModule.CreateDefault(newId, "New Hero")
+        CharRegistry.SaveCustom(newMod)
+        editModuleId_ = newId
+    elseif opts.editId then
+        editModuleId_ = opts.editId
+    else
+        editModuleId_ = opts.moduleId or CharRegistry.GetCurrentId() or "wisdel"
+    end
+
     onClose_ = opts.onClose
     onTestBattle_ = opts.onTestBattle
 
@@ -947,12 +1201,17 @@ function M.Close()
     mainTabApi_ = nil
     modeSwitchApi_ = nil
     phaseSwitchApi_ = nil
-    -- 清空控件引用
+    -- 清空控件引用（点数池系统）
     attr_nameField_ = nil
-    attr_speedSlider_ = nil
-    attr_hpSlider_ = nil
-    attr_damageSlider_ = nil
-    attr_rangeSlider_ = nil
+    attr_hpPtsSlider_ = nil
+    attr_atkPtsSlider_ = nil
+    attr_spdPtsSlider_ = nil
+    attr_rngPtsSlider_ = nil
+    attr_remainLabel_ = nil
+    attr_hpValLabel_ = nil
+    attr_atkValLabel_ = nil
+    attr_spdValLabel_ = nil
+    attr_rngValLabel_ = nil
     attr_cooldownSlider_ = nil
     attr_stopDistSlider_ = nil
     attr_collisionRadiusSlider_ = nil
@@ -967,6 +1226,9 @@ function M.Close()
     app_sliderGlowR_ = nil
     app_sliderGlowG_ = nil
     app_sliderGlowB_ = nil
+    -- 重置创建模式标志
+    createMode_ = false
+    createConfirmed_ = false
 
     if onClose_ then onClose_() end
     print("[CharacterMaker] Closed")

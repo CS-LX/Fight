@@ -15,6 +15,7 @@ local ProjectileRender = require("render.ProjectileRender")
 local GameUI = require("GameUI")
 local DeploymentEditor = require("ui.DeploymentEditor")
 local CharacterMaker = require("ui.CharacterMaker")
+local Workshop = require("ui.Workshop")
 local Lobby = require("ui.Lobby")
 local Economy = require("economy.Economy")
 local Ranked = require("economy.Ranked")
@@ -63,6 +64,9 @@ local isRankedBattle_ = false
 
 --- 上次战斗的部署费用（结算时显示）
 local lastDeployCost_ = 0
+
+--- 沙盒测试模式（不触发经济结算）
+local sandboxMode_ = false
 
 -- ============================================================================
 -- 生命周期
@@ -407,6 +411,10 @@ end
 --- 从制作器发起的快速测试战斗
 ---@param moduleId string
 function TestBattleFromMaker(moduleId)
+    -- 开启沙盒模式（不触发经济结算）
+    sandboxMode_ = true
+    lastDeployCost_ = 0
+
     -- 清除旧数据
     CharRender.Clear(characters_)
     ProjectileRender.Clear()
@@ -432,7 +440,7 @@ function TestBattleFromMaker(moduleId)
         ResetGame()
     end)
     GameUI.ResetStatus()
-    print("[Main] Test battle from Maker: " .. moduleId)
+    print("[Main] Sandbox test battle: " .. moduleId)
 end
 
 --- 从部署数据启动战斗
@@ -603,6 +611,22 @@ function SettleBattleResult()
         return
     end
 
+    -- 沙盒测试模式：只显示结果，不触发经济
+    if sandboxMode_ then
+        sandboxMode_ = false
+        local winTeam = gameState_ == "redWin" and "red" or "blue"
+        local title = "沙盒测试 - " .. (winTeam == "red" and "红方胜" or "蓝方胜")
+        local items = {
+            { label = "模式", amount = 0, unit = "沙盒" },
+            { label = "提示", amount = 0, unit = "无经济影响" },
+        }
+        GameUI.ShowSettlement(title, true, items, function()
+            -- 回到角色制作器
+            OpenCharacterMakerFromLobby()
+        end)
+        return
+    end
+
     -- 判断胜负（当前规则：玩家部署了哪方？默认 red 为玩家方）
     local playerTeam = "red"
     for _, u in ipairs(deployedUnits_) do
@@ -664,6 +688,12 @@ function SettleBattleResult()
         if fighterBonus > 0 then
             table.insert(items, { label = "赞助池分成", amount = fighterBonus })
         end
+    end
+
+    -- 连胜创造晶奖励 (Phase 3)
+    local crystalEarned = Economy.ProcessBattleWinStreak(playerWon)
+    if crystalEarned > 0 then
+        table.insert(items, { label = "创造晶", amount = crystalEarned, unit = "◆" })
     end
 
     -- 显示结算面板（用户点击后回大厅）
@@ -849,9 +879,44 @@ end
 
 --- 从大厅打开角色制作器
 function OpenCharacterMakerFromLobby()
-    CharacterMaker.Open({
-        onClose = function()
+    Workshop.Open({
+        onBack = function()
             EnterLobby()
+        end,
+        onCreate = function()
+            -- 创建新角色：进入编辑器（新建模式）
+            OpenCharacterMakerNew()
+        end,
+        onEdit = function(charId)
+            -- 编辑已有角色：进入编辑器（编辑模式）
+            OpenCharacterMakerEdit(charId)
+        end,
+    })
+end
+
+--- 从工坊进入编辑器（新建模式）
+function OpenCharacterMakerNew()
+    CharacterMaker.Open({
+        mode = "create",
+        onClose = function()
+            -- 返回工坊
+            OpenCharacterMakerFromLobby()
+        end,
+        onTestBattle = function(moduleId)
+            TestBattleFromMaker(moduleId)
+        end,
+    })
+end
+
+--- 从工坊进入编辑器（编辑已有角色）
+---@param charId string
+function OpenCharacterMakerEdit(charId)
+    CharacterMaker.Open({
+        mode = "edit",
+        editId = charId,
+        onClose = function()
+            -- 返回工坊
+            OpenCharacterMakerFromLobby()
         end,
         onTestBattle = function(moduleId)
             TestBattleFromMaker(moduleId)

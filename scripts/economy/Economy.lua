@@ -1,8 +1,9 @@
 -- ============================================================================
--- economy/Economy.lua - 金币经济系统
+-- economy/Economy.lua - 双币种经济系统（金币 + 创造晶）
 -- ============================================================================
--- 职责：管理金币余额、收支交易、持久化存储
--- Phase 1 核心模块：所有对战/赞助/创建都围绕金币经济运转
+-- 职责：管理金币/创造晶余额、收支交易、持久化存储
+-- Phase 1: 金币（对战/赞助/部署）
+-- Phase 3: 创造晶（UGC 角色创建、稀有角色解锁）
 
 local M = {}
 
@@ -40,6 +41,20 @@ M.Config = {
     NEWBIE_COST_MULTIPLIER = 0.5,
     -- 新手保护：金币低于此值时触发
     NEWBIE_THRESHOLD = 100,
+
+    -- ========== 创造晶 (Phase 3) ==========
+    -- 新玩家初始创造晶
+    STARTER_CRYSTAL = 500,
+    -- UGC 角色创建费用
+    UGC_CREATE_COST = 2000,
+    -- 对战连胜奖励创造晶（连胜 3 场起）
+    WIN_STREAK_CRYSTAL_REWARD = 50,
+    -- 连胜奖励起始场次
+    WIN_STREAK_THRESHOLD = 3,
+    -- 每日首胜创造晶奖励
+    DAILY_FIRST_WIN_CRYSTAL = 30,
+    -- 赛季结算基础创造晶奖励
+    SEASON_BASE_CRYSTAL = 200,
 }
 
 -- ============================================================================
@@ -49,8 +64,11 @@ M.Config = {
 --- 玩家金币余额
 local balance_ = 0
 
+--- 玩家创造晶余额
+local crystalBalance_ = 0
+
 --- 交易历史（最近 50 条）
----@type {type: string, amount: number, desc: string, time: number}[]
+---@type {type: string, amount: number, desc: string, time: number, currency: string}[]
 local history_ = {}
 
 --- 历史最大保留条数
@@ -58,7 +76,15 @@ local MAX_HISTORY = 50
 
 --- 云变量 key
 local CLOUD_KEY_BALANCE = "gold"
+local CLOUD_KEY_CRYSTAL = "crystal"
 local CLOUD_KEY_HISTORY = "tx_history"
+
+--- 连胜计数
+local winStreak_ = 0
+--- 今日首胜是否已领取
+local dailyFirstWinClaimed_ = false
+--- 上次首胜日期
+local lastFirstWinDay_ = -1
 
 --- 是否已初始化
 local initialized_ = false
@@ -85,12 +111,14 @@ end
 ---@param txType string "earn" | "spend"
 ---@param amount number
 ---@param desc string
-local function RecordTransaction(txType, amount, desc)
+---@param currency? string "gold" | "crystal" 默认 "gold"
+local function RecordTransaction(txType, amount, desc, currency)
     table.insert(history_, 1, {
         type = txType,
         amount = amount,
         desc = desc,
         time = os.time(),
+        currency = currency or "gold",
     })
     -- 截断超出部分
     while #history_ > MAX_HISTORY do
@@ -224,6 +252,96 @@ function M.GetRecentHistory(n)
 end
 
 -- ============================================================================
+-- 创造晶 API (Phase 3)
+-- ============================================================================
+
+--- 获取创造晶余额
+---@return number
+function M.GetCrystal()
+    return crystalBalance_
+end
+
+--- 判断是否能负担指定创造晶
+---@param amount number
+---@return boolean
+function M.CanAffordCrystal(amount)
+    return crystalBalance_ >= amount
+end
+
+--- 获得创造晶
+---@param amount number
+---@param desc string
+---@return number newBalance
+function M.EarnCrystal(amount, desc)
+    if amount <= 0 then return crystalBalance_ end
+    crystalBalance_ = crystalBalance_ + amount
+    RecordTransaction("earn", amount, desc or "创造晶收入", "crystal")
+    M.Save()
+    print(string.format("[Economy] +%d晶 (%s) → %d晶", amount, desc or "创造晶收入", crystalBalance_))
+    return crystalBalance_
+end
+
+--- 花费创造晶（返回是否成功）
+---@param amount number
+---@param desc string
+---@return boolean success
+function M.SpendCrystal(amount, desc)
+    if amount <= 0 then return true end
+    if crystalBalance_ < amount then
+        print(string.format("[Economy] CRYSTAL FAILED: need %d, have %d (%s)", amount, crystalBalance_, desc or ""))
+        return false
+    end
+    crystalBalance_ = crystalBalance_ - amount
+    RecordTransaction("spend", amount, desc or "创造晶支出", "crystal")
+    M.Save()
+    print(string.format("[Economy] -%d晶 (%s) → %d晶", amount, desc or "创造晶支出", crystalBalance_))
+    return true
+end
+
+--- 尝试花费创造晶创建 UGC 角色
+---@return boolean success
+function M.SpendCrystalForUGC()
+    return M.SpendCrystal(M.Config.UGC_CREATE_COST, "创建UGC角色")
+end
+
+--- 对战胜利时处理连胜创造晶奖励
+---@param won boolean
+---@return number crystalEarned 本次获得的创造晶（0=未达到连胜门槛）
+function M.ProcessBattleWinStreak(won)
+    if won then
+        winStreak_ = winStreak_ + 1
+        -- 每日首胜奖励
+        local today = os.date("*t").yday
+        if today ~= lastFirstWinDay_ then
+            dailyFirstWinClaimed_ = false
+            lastFirstWinDay_ = today
+        end
+        local earned = 0
+        if not dailyFirstWinClaimed_ then
+            dailyFirstWinClaimed_ = true
+            earned = earned + M.Config.DAILY_FIRST_WIN_CRYSTAL
+            M.EarnCrystal(M.Config.DAILY_FIRST_WIN_CRYSTAL, "每日首胜")
+        end
+        -- 连胜奖励
+        if winStreak_ >= M.Config.WIN_STREAK_THRESHOLD then
+            earned = earned + M.Config.WIN_STREAK_CRYSTAL_REWARD
+            M.EarnCrystal(M.Config.WIN_STREAK_CRYSTAL_REWARD,
+                string.format("连胜×%d", winStreak_))
+        end
+        return earned
+    else
+        winStreak_ = 0
+        return 0
+    end
+end
+
+--- 获取当前连胜数
+---@return number
+function M.GetWinStreak()
+    return winStreak_
+end
+
+-- ============================================================================
 -- 持久化（clientCloud 云存储）
 -- ============================================================================
 
@@ -231,10 +349,11 @@ end
 function M.Save()
     clientCloud:BatchSet()
         :SetInt(CLOUD_KEY_BALANCE, balance_)
+        :SetInt(CLOUD_KEY_CRYSTAL, crystalBalance_)
         :Set(CLOUD_KEY_HISTORY, history_)
         :Save("economy_save", {
             ok = function()
-                print("[Economy] Cloud save OK, balance=" .. balance_)
+                print(string.format("[Economy] Cloud save OK, gold=%d, crystal=%d", balance_, crystalBalance_))
             end,
             error = function(code, reason)
                 print("[Economy] Cloud save FAILED: " .. tostring(reason))
@@ -246,22 +365,32 @@ end
 function M.Load()
     clientCloud:BatchGet()
         :Key(CLOUD_KEY_BALANCE)
+        :Key(CLOUD_KEY_CRYSTAL)
         :Key(CLOUD_KEY_HISTORY)
         :Fetch({
             ok = function(values, iscores)
                 local savedBalance = iscores[CLOUD_KEY_BALANCE]
+                local savedCrystal = iscores[CLOUD_KEY_CRYSTAL]
                 if savedBalance and savedBalance > 0 then
                     -- 老玩家：恢复存档
                     balance_ = savedBalance
+                    crystalBalance_ = savedCrystal or 0
                     history_ = values[CLOUD_KEY_HISTORY] or {}
-                    print("[Economy] Cloud load OK, balance=" .. balance_)
+                    -- 如果老玩家没有创造晶记录（Phase 3 新增），发放初始创造晶
+                    if crystalBalance_ == 0 and not savedCrystal then
+                        crystalBalance_ = M.Config.STARTER_CRYSTAL
+                        RecordTransaction("earn", M.Config.STARTER_CRYSTAL, "工坊解锁礼包", "crystal")
+                    end
+                    print(string.format("[Economy] Cloud load OK, gold=%d, crystal=%d", balance_, crystalBalance_))
                 else
-                    -- 新玩家：发放初始金币
+                    -- 新玩家：发放初始金币和创造晶
                     balance_ = M.Config.STARTER_GOLD
+                    crystalBalance_ = M.Config.STARTER_CRYSTAL
                     history_ = {}
                     RecordTransaction("earn", M.Config.STARTER_GOLD, "新手礼包")
+                    RecordTransaction("earn", M.Config.STARTER_CRYSTAL, "工坊解锁礼包", "crystal")
                     M.Save()
-                    print("[Economy] New player, starter gold: " .. balance_)
+                    print(string.format("[Economy] New player, gold=%d, crystal=%d", balance_, crystalBalance_))
                 end
                 FireReady()
             end,
@@ -269,8 +398,10 @@ function M.Load()
                 -- 云端加载失败，使用默认值继续游戏
                 print("[Economy] Cloud load FAILED: " .. tostring(reason) .. ", using defaults")
                 balance_ = M.Config.STARTER_GOLD
+                crystalBalance_ = M.Config.STARTER_CRYSTAL
                 history_ = {}
                 RecordTransaction("earn", M.Config.STARTER_GOLD, "新手礼包")
+                RecordTransaction("earn", M.Config.STARTER_CRYSTAL, "工坊解锁礼包", "crystal")
                 FireReady()
             end,
         })
@@ -279,10 +410,14 @@ end
 --- 重置经济数据（调试用）
 function M.Reset()
     balance_ = M.Config.STARTER_GOLD
+    crystalBalance_ = M.Config.STARTER_CRYSTAL
+    winStreak_ = 0
+    dailyFirstWinClaimed_ = false
     history_ = {}
     RecordTransaction("earn", M.Config.STARTER_GOLD, "重置奖励")
+    RecordTransaction("earn", M.Config.STARTER_CRYSTAL, "重置创造晶", "crystal")
     M.Save()
-    print("[Economy] Reset to starter gold: " .. balance_)
+    print(string.format("[Economy] Reset: gold=%d, crystal=%d", balance_, crystalBalance_))
 end
 
 -- ============================================================================
