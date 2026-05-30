@@ -25,7 +25,7 @@ local COLORS = {
     cardSelected    = { 255, 200, 40, 255 },    -- golden yellow
     -- 顶栏/底栏
     headerBg        = { 15, 15, 35, 250 },     -- background
-    footerBg        = { 15, 15, 35, 250 },
+    footerBg        = { 14, 14, 35, 138 },
     -- 文字
     gold            = { 255, 217, 61, 255 },   -- warning/gold
     redText         = { 255, 71, 87, 255 },    -- error/red
@@ -80,6 +80,8 @@ local onStartBattle_ = nil
 local onClear_ = nil
 ---@type function|nil
 local onOpenMaker_ = nil
+---@type any
+local footer_ = nil
 
 -- ============================================================================
 -- 公开接口
@@ -160,6 +162,13 @@ local function CreateCardPanel(team)
                     c:SetStyle({ borderColor = COLORS.cardBorder, boxShadow = {} })
                 end
                 M.SetHint("点击" .. (isRed and "左半场" or "右半场") .. "放置")
+                -- 底栏跟随选中队伍变色（50%不透明度）
+                if footer_ then
+                    local footerColor = isRed
+                        and { 120, 30, 40, 128 }
+                        or  { 30, 50, 120, 128 }
+                    footer_:SetStyle({ backgroundColor = footerColor })
+                end
             end,
             children = {
                 -- 背景头像（撑满整个卡片）
@@ -174,7 +183,7 @@ local function CreateCardPanel(team)
                     position = "absolute",
                     top = 0, left = 0, right = 0,
                     height = 16,
-                    bgColor = { 0, 0, 0, 171 },
+                    backgroundColor = { 0, 0, 0, 171 },
                     justifyContent = "center",
                     alignItems = "flex-start",
                     children = {
@@ -227,12 +236,16 @@ local function CreateCardPanel(team)
         table.insert(panelChildren, c)
     end
 
+    local panelBgColor = (team == "red")
+        and { 198, 85, 68, 104 }
+        or  { 27, 27, 58, 104 }
+
     return UI.Panel {
         width = CARD_SIZE + 16,
         paddingTop = 8,
         paddingBottom = 8,
         paddingHorizontal = 8,
-        bgColor = COLORS.panelBg,
+        backgroundColor = panelBgColor,
         borderWidth = 2,
         borderColor = COLORS.panelBorder,
         alignItems = "center",
@@ -296,7 +309,7 @@ function M.Open(opts)
         children = {
             UI.Panel {
                 width = 8, height = 8,
-                bgColor = COLORS.redText,
+                backgroundColor = COLORS.redText,
                 borderWidth = 1,
                 borderColor = { 180, 40, 50, 255 },
             },
@@ -323,7 +336,7 @@ function M.Open(opts)
         children = {
             UI.Panel {
                 width = 8, height = 8,
-                bgColor = COLORS.blueText,
+                backgroundColor = COLORS.blueText,
                 borderWidth = 1,
                 borderColor = { 40, 120, 180, 255 },
             },
@@ -359,12 +372,12 @@ function M.Open(opts)
         height = 34,
         fontSize = 14,
         fontWeight = "bold",
-        backgroundColor = COLORS.btnPrimary,
-        hoverBackgroundColor = COLORS.btnPrimaryHover,
-        pressedBackgroundColor = COLORS.btnPrimaryPress,
-        textColor = { 15, 15, 35, 255 },
+        backgroundColor = { 255, 187, 0, 255 },
+        hoverBackgroundColor = { 255, 210, 50, 255 },
+        pressedBackgroundColor = { 220, 160, 0, 255 },
+        textColor = { 255, 255, 255, 255 },
         borderWidth = 2,
-        borderColor = { 25, 168, 153, 255 },
+        borderColor = { 255, 141, 0, 255 },
         onClick = function(self)
             if onStartBattle_ then
                 onStartBattle_()
@@ -419,7 +432,7 @@ function M.Open(opts)
         flexDirection = "row",
         alignItems = "center",
         paddingHorizontal = 12,
-        bgColor = COLORS.footerBg,
+        backgroundColor = COLORS.footerBg,
         borderWidth = 2,
         borderColor = COLORS.panelBorder,
         children = {
@@ -433,6 +446,8 @@ function M.Open(opts)
             makerBtn,
         }
     }
+
+    footer_ = footer
 
     -- === 根布局 ===
     local rootChildren = {}
