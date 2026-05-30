@@ -147,6 +147,7 @@ local function CreateBloodyWolfPreset()
             },
         },
         ai = {
+            profile = "defensive",
             behaviourTree = {
                 rootId = "node_1",
                 nodes = {

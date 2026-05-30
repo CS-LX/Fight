@@ -576,9 +576,10 @@ function M.Update(characters, camera, dt)
             UpdateSpriteBoneAnimation(char, rd, frameDt, def)
         end
 
-        -- 受击闪红检测：animState 切到 "hit" 时触发
-        if char.animState == "hit" and not rd.hitFlashing then
+        -- 受击闪红检测：消费 hitFlag（由 Battle 设置，一次性标记）
+        if char.hitFlag and not rd.hitFlashing then
             TriggerHitFlash(char, rd)
+            char.hitFlag = nil
         end
 
         -- 应用受击染色

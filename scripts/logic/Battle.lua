@@ -31,6 +31,7 @@ function M.PerformAttack(attacker, target)
         -- 受击
         target.animState = "hit"
         target.animTimer = 0.3
+        target.hitFlag = true  -- 渲染层消费后清除
     end
 end
 
