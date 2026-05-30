@@ -48,6 +48,8 @@ function M.Collect(characters)
                     targetChar = pdata.targetChar,
                     speed = pdata.speed or 8,
                     damage = pdata.damage or 10,
+                    angularSpeed = pdata.angularSpeed or 0,
+                    rotation = 0,
                     -- 当前位置（从发射点开始）
                     pos = Vector3(pdata.fromPos.x, pdata.fromPos.y, pdata.fromPos.z),
                     alive = true,
@@ -120,17 +122,24 @@ function M.Update(camera, dt)
                         proj.pos.z + dz * invDist * step
                     )
 
+                    -- 累积旋转角度
+                    if proj.angularSpeed ~= 0 then
+                        proj.rotation = proj.rotation + proj.angularSpeed * dt
+                    end
+
                     -- 世界坐标 → 屏幕坐标
                     local screenPos = camera:WorldToScreenPoint(proj.pos)
                     local sx = screenPos.x * screenW
                     local sy = screenPos.y * screenH
 
-
-
-                    proj.widget:SetStyle({
+                    local style = {
                         left = math.floor(sx - PROJ_SIZE / 2),
                         top = math.floor(sy - PROJ_SIZE / 2),
-                    })
+                    }
+                    if proj.angularSpeed ~= 0 then
+                        style.rotate = proj.rotation
+                    end
+                    proj.widget:SetStyle(style)
                 end
             end
 

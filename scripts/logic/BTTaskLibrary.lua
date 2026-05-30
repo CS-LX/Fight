@@ -726,6 +726,7 @@ M.Register("RangedAttack", {
         { key = "hitEffect", type = "string", default = "", label = "命中特效" },
         { key = "bulletColor", type = "string", default = "#ffff00", label = "子弹颜色" },
         { key = "damageMultiplier", type = "number", default = 1.0, label = "伤害倍率" },
+        { key = "angularSpeed", type = "number", default = 0, label = "子弹角速度(度/秒)" },
     },
     factory = function(params)
         params = params or {}
@@ -735,6 +736,7 @@ M.Register("RangedAttack", {
         local hitEffect = params.hitEffect or ""
         local bulletColor = params.bulletColor or "#ffff00"
         local damageMul = params.damageMultiplier or 1.0
+        local angularSpeed = params.angularSpeed or 0
 
         return BT.Task:new({
             run = function(task, ctx)
@@ -752,6 +754,9 @@ M.Register("RangedAttack", {
                 char.animState = "attack"
 
                 if char.attackCooldown <= 0 then
+                    -- 锁定攻击动画（投掷动作持续时间）
+                    char.animTimer = 0.5
+
                     -- 发射投射物（存入角色的 projectiles 列表，由渲染层消费）
                     if not char.projectiles then char.projectiles = {} end
                     char.projectiles[#char.projectiles + 1] = {
@@ -763,6 +768,7 @@ M.Register("RangedAttack", {
                         hitEffect = hitEffect,
                         bulletColor = bulletColor,
                         damage = (char.attackDamage or 10) * damageMul,
+                        angularSpeed = angularSpeed,
                     }
 
                     local cooldownMul = ctx.profileParams and ctx.profileParams.cooldownMul or 1.0

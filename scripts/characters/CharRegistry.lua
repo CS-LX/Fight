@@ -289,12 +289,13 @@ local function CreateKisakiPreset()
                     node_3b = { id = "node_3b", type = "Task", taskName = "InAttackRange" },
                     node_3c = { id = "node_3c", type = "Task", taskName = "RangedAttack",
                         params = {
-                            bulletSpeed = 8,
+                            bulletSpeed = 14,
                             bulletEffect = "image/Coke.png",
                             hitEffect = "",
                             muzzleEffect = "",
                             bulletColor = "#1a5276",
                             damageMultiplier = 1.0,
+                            angularSpeed = 540,
                         },
                     },
                     -- 优先级3: 追击到射程
