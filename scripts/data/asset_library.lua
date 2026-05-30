@@ -15,7 +15,13 @@ M.spines = {
         pma = true,
         anims = { "Default", "Move", "Interact", "Sleep", "Relax" },
     },
-    -- 后续添加更多 Spine 时追加到这里
+    {
+        id = "originium_slug",
+        name = "源石虫",
+        src = "spine/originium_slug/originium_slug.skel",
+        pma = true,
+        anims = { "Idle", "Move_Begin", "Move_End", "Attack", "Die", "Default" },
+    },
 }
 
 --- 精灵素材分类

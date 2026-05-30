@@ -1,0 +1,55 @@
+{
+  "id": "originium_slug",
+  "name": "源石虫",
+  "config": {
+    "baseSpeed": 3.5,
+    "baseHP": 45,
+    "attackDamage": 6,
+    "attackRange": 0.8,
+    "attackCooldown": 0.7,
+    "stopDistance": 0.3,
+    "collisionRadius": 0.25
+  },
+  "art": {
+    "mode": "spine",
+    "avatar": "image/originium_slug_icon.png",
+    "spineSrc": "spine/originium_slug/originium_slug.skel",
+    "pma": true,
+    "anims": {
+      "idle": "Idle",
+      "move": "Move_Begin",
+      "attack": "Attack",
+      "hit": "Move_End",
+      "die": "Die",
+      "relax": "Default"
+    },
+    "renderScale": 0.35
+  },
+  "ai": {
+    "profile": "swarm",
+    "behaviourTree": {
+      "rootId": "node_1",
+      "nodes": {
+        "node_1": { "id": "node_1", "type": "ActivePriority", "name": "抢占优先级", "x": 60, "y": 200 },
+        "node_2": { "id": "node_2", "type": "Sequence", "name": "集火攻击", "x": 319, "y": 84 },
+        "node_3": { "id": "node_3", "type": "Task", "name": "有敌人", "taskName": "HasEnemy", "x": 580, "y": 20 },
+        "node_4": { "id": "node_4", "type": "Task", "name": "在攻击范围", "taskName": "InAttackRange", "x": 580, "y": 80 },
+        "node_5": { "id": "node_5", "type": "Task", "name": "攻击", "taskName": "Attack", "x": 580, "y": 140 },
+        "node_6": { "id": "node_6", "type": "Sequence", "name": "抱团追击", "x": 320, "y": 240 },
+        "node_7": { "id": "node_7", "type": "Task", "name": "有敌人", "taskName": "HasEnemy", "x": 580, "y": 220 },
+        "node_8": { "id": "node_8", "type": "Task", "name": "集火追击", "taskName": "ChaseWeakest", "x": 580, "y": 280 },
+        "node_9": { "id": "node_9", "type": "Task", "name": "巡逻", "taskName": "Patrol", "x": 320, "y": 400 }
+      },
+      "edges": [
+        { "from": "node_1", "to": "node_2", "order": 1 },
+        { "from": "node_1", "to": "node_6", "order": 2 },
+        { "from": "node_1", "to": "node_9", "order": 3 },
+        { "from": "node_2", "to": "node_3", "order": 1 },
+        { "from": "node_2", "to": "node_4", "order": 2 },
+        { "from": "node_2", "to": "node_5", "order": 3 },
+        { "from": "node_6", "to": "node_7", "order": 1 },
+        { "from": "node_6", "to": "node_8", "order": 2 }
+      ]
+    }
+  }
+}
