@@ -39,7 +39,7 @@
       },
       "attack": {
         "duration": 0.7,
-        "bones": [{ "id": "body", "sprite": "kisaki", "pivotX": 0, "pivotY": 0 }],
+        "bones": [{ "id": "body", "sprite": "kisaki_nocoke", "pivotX": 0, "pivotY": 0 }],
         "keyframes": {
           "0": { "body": { "x": 0, "y": 0, "rot": 0, "scaleX": 1.0, "scaleY": 1.0 } },
           "0.2": { "body": { "x": -6, "y": -2, "rot": -15, "scaleX": 1.05, "scaleY": 0.92 } },

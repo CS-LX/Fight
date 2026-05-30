@@ -93,6 +93,22 @@ local function CreateSpriteBonePanel(def)
         end
     end
 
+    -- 预加载所有动画阶段可能用到的不同 sprite 贴图（避免首次切换时出现 fadein）
+    if def.frames then
+        for _, phaseData in pairs(def.frames) do
+            if phaseData.bones then
+                for _, bone in ipairs(phaseData.bones) do
+                    if bone.sprite and bone.sprite ~= "" then
+                        local info = AssetLibrary.GetSprite(bone.sprite)
+                        if info and info.image and info.image ~= bgImage then
+                            cache:GetResource("Texture2D", info.image)
+                        end
+                    end
+                end
+            end
+        end
+    end
+
     return panel
 end
 
@@ -225,6 +241,7 @@ function M.CreateSpines(characters)
             -- sprite_bone 动画状态
             sbAnimPhase = "idle",
             sbAnimTime = 0,
+            sbCurrentSprite = (def.frames and def.frames.idle and def.frames.idle.bones and def.frames.idle.bones[1] and def.frames.idle.bones[1].sprite) or nil,
         }
 
         table.insert(children, spine)
@@ -306,6 +323,7 @@ function M.AddOne(char)
         -- sprite_bone 动画状态
         sbAnimPhase = "idle",
         sbAnimTime = 0,
+        sbCurrentSprite = (def.frames and def.frames.idle and def.frames.idle.bones and def.frames.idle.bones[1] and def.frames.idle.bones[1].sprite) or nil,
     }
 
     spineContainer_:AddChild(spine)
@@ -399,10 +417,28 @@ local function UpdateSpriteBoneAnimation(char, rd, dt, def)
         targetPhase = "idle"
     end
 
-    -- 阶段切换时重置时间
+    -- 阶段切换时重置时间 + 检查是否需要切换 sprite
     if rd.sbAnimPhase ~= targetPhase then
         rd.sbAnimPhase = targetPhase
         rd.sbAnimTime = 0
+
+        -- 检查新阶段的 body bone sprite 是否与当前不同
+        local phaseData = def.frames[targetPhase]
+        if phaseData and phaseData.bones then
+            for _, bone in ipairs(phaseData.bones) do
+                if bone.id == "body" and bone.sprite then
+                    local currentSprite = rd.sbCurrentSprite
+                    if currentSprite ~= bone.sprite then
+                        local info = AssetLibrary.GetSprite(bone.sprite)
+                        if info and info.image then
+                            rd.spine:SetStyle({ backgroundImage = info.image })
+                            rd.sbCurrentSprite = bone.sprite
+                        end
+                    end
+                    break
+                end
+            end
+        end
     end
 
     -- 推进时间

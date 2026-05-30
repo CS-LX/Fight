@@ -24,6 +24,7 @@ M.sprites = {
     -- 角色（图片素材）
     { id = "bunny", name = "Bunny", category = "character", image = "image/Bunny.png", width = 48, height = 48 },
     { id = "kisaki", name = "Kisaki", category = "character", image = "image/Kisaki.png", width = 48, height = 48 },
+    { id = "kisaki_nocoke", name = "Kisaki (No Coke)", category = "character", image = "image/Kisaki_NoCoke.png", width = 48, height = 48 },
     -- 投射物
     { id = "coke", name = "Coke Can", category = "projectile", image = "image/Coke.png", width = 24, height = 24 },
     -- 头部
