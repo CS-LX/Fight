@@ -64,25 +64,37 @@ function M.Create(scene)
     local W = Config.ArenaWidth   -- 20m
     local D = Config.ArenaDepth   -- 14m
 
-    -- ===================== 地面（竞技场地板）=====================
+    -- ===================== 3D 竞技场模型 =====================
+    -- 模型原始尺寸: 0.869 x 0.5 x 0.869 (近正方形)
+    -- 分轴缩放适配竞技场: X=20m, Z=14m
+    local modelSizeX = 0.869
+    local modelSizeY = 0.5
+    local modelSizeZ = 0.869
+    local scaleX = (W + 4) / modelSizeX    -- 覆盖略大于场地的区域
+    local scaleZ = (D + 4) / modelSizeZ
+    local scaleY = 12.0                     -- 适中高度（模型0.5m * 12 = 6m高）
+
+    local arenaNode = scene:CreateChild("ArenaModel")
+    arenaNode.scale = Vector3(scaleX, scaleY, scaleZ)
+    -- 模型底部在 Y=-0.25（本地坐标），对齐地面
+    arenaNode.position = Vector3(0, 0.25 * scaleY, 0)
+
+    local arenaModel = arenaNode:CreateComponent("StaticModel")
+    arenaModel:SetModel(cache:GetResource("Model", "Meshes/arena_stadium.mdl"))
+    arenaModel:SetMaterial(cache:GetResource("Material", "Materials/arena_stadium_00_tripo_material_742b7daf-ec0a-4827-9030-d8fd15b7a763.xml"))
+    arenaModel.castShadows = true
+
+    -- ===================== 地面（角色行走平面）=====================
     local floorNode = scene:CreateChild("Floor")
     floorNode.position = Vector3(0, -0.15, 0)
-    floorNode.scale = Vector3(W + 4, 0.3, D + 4)
+    floorNode.scale = Vector3(W, 0.3, D)
     local floorModel = floorNode:CreateComponent("StaticModel")
     floorModel:SetModel(cache:GetResource("Model", "Models/Box.mdl"))
-    floorModel:SetMaterial(MakeMat(Color(0.22, 0.22, 0.25, 1.0), 0.05, 0.85))
-
-    -- 竞技台面（略高于地面的比赛区域）
-    local stageNode = scene:CreateChild("Stage")
-    stageNode.position = Vector3(0, 0.02, 0)
-    stageNode.scale = Vector3(W, 0.04, D)
-    local stageModel = stageNode:CreateComponent("StaticModel")
-    stageModel:SetModel(cache:GetResource("Model", "Models/Box.mdl"))
-    stageModel:SetMaterial(MakeMat(Color(0.18, 0.2, 0.22, 1.0), 0.0, 0.9))
+    floorModel:SetMaterial(MakeMat(Color(0.2, 0.2, 0.22, 1.0), 0.05, 0.9))
 
     -- 中线标记
     local lineNode = scene:CreateChild("CenterLine")
-    lineNode.position = Vector3(0, 0.05, 0)
+    lineNode.position = Vector3(0, 0.02, 0)
     lineNode.scale = Vector3(0.08, 0.01, D - 1)
     local lineModel = lineNode:CreateComponent("StaticModel")
     lineModel:SetModel(cache:GetResource("Model", "Models/Box.mdl"))
@@ -90,7 +102,7 @@ function M.Create(scene)
 
     -- RED 侧标记线
     local redLine = scene:CreateChild("RedLine")
-    redLine.position = Vector3(-W / 4, 0.05, 0)
+    redLine.position = Vector3(-W / 4, 0.02, 0)
     redLine.scale = Vector3(0.05, 0.01, D - 2)
     local redLineModel = redLine:CreateComponent("StaticModel")
     redLineModel:SetModel(cache:GetResource("Model", "Models/Box.mdl"))
@@ -98,82 +110,24 @@ function M.Create(scene)
 
     -- BLUE 侧标记线
     local blueLine = scene:CreateChild("BlueLine")
-    blueLine.position = Vector3(W / 4, 0.05, 0)
+    blueLine.position = Vector3(W / 4, 0.02, 0)
     blueLine.scale = Vector3(0.05, 0.01, D - 2)
     local blueLineModel = blueLine:CreateComponent("StaticModel")
     blueLineModel:SetModel(cache:GetResource("Model", "Models/Box.mdl"))
     blueLineModel:SetMaterial(MakeMat(Color(0.2, 0.4, 0.9, 1.0), 0.0, 0.6))
 
-    -- ===================== 围栏/护墙 =====================
-    local wallH = 1.2
-    local wallT = 0.2
-    local wallMat = MakeMat(Color(0.4, 0.4, 0.45, 1.0), 0.6, 0.4)
-
-    -- 四面矮墙
-    local walls = {
-        { Vector3(0, wallH / 2, D / 2 + wallT / 2), Vector3(W + wallT * 2, wallH, wallT) },
-        { Vector3(0, wallH / 2, -D / 2 - wallT / 2), Vector3(W + wallT * 2, wallH, wallT) },
-        { Vector3(-W / 2 - wallT / 2, wallH / 2, 0), Vector3(wallT, wallH, D) },
-        { Vector3(W / 2 + wallT / 2, wallH / 2, 0), Vector3(wallT, wallH, D) },
-    }
-    for _, w in ipairs(walls) do
-        local wn = scene:CreateChild("Wall")
-        wn.position = w[1]
-        wn.scale = w[2]
-        local wm = wn:CreateComponent("StaticModel")
-        wm:SetModel(cache:GetResource("Model", "Models/Box.mdl"))
-        wm:SetMaterial(wallMat)
-        wm.castShadows = true
-    end
-
-    -- ===================== 看台（前后两侧）=====================
-    CreateBleacher(scene, Vector3(0, 0, D / 2 + 1.5), W - 2, 3.0, 4)
-    CreateBleacher(scene, Vector3(0, 0, -D / 2 - 1.5), W - 2, -3.0, 4)
-
-    -- ===================== 桁架柱（四角 + 中间）=====================
-    local trussH = 6.0
-    local trussPositions = {
-        Vector3(-W / 2 - 0.5, trussH / 2, D / 2 + 0.5),
-        Vector3(W / 2 + 0.5, trussH / 2, D / 2 + 0.5),
-        Vector3(-W / 2 - 0.5, trussH / 2, -D / 2 - 0.5),
-        Vector3(W / 2 + 0.5, trussH / 2, -D / 2 - 0.5),
-        Vector3(0, trussH / 2, D / 2 + 0.5),
-        Vector3(0, trussH / 2, -D / 2 - 0.5),
-    }
-    for _, p in ipairs(trussPositions) do
-        CreateTruss(scene, p, trussH)
-    end
-
-    -- 顶部横梁（连接桁架）
-    local beamMat = MakeMat(Color(0.3, 0.3, 0.35, 1.0), 0.7, 0.4)
-    local beams = {
-        { Vector3(0, trussH + 0.1, D / 2 + 0.5), Vector3(W + 1.5, 0.12, 0.12) },
-        { Vector3(0, trussH + 0.1, -D / 2 - 0.5), Vector3(W + 1.5, 0.12, 0.12) },
-        { Vector3(-W / 2 - 0.5, trussH + 0.1, 0), Vector3(0.12, 0.12, D + 1.5) },
-        { Vector3(W / 2 + 0.5, trussH + 0.1, 0), Vector3(0.12, 0.12, D + 1.5) },
-    }
-    for _, b in ipairs(beams) do
-        local bn = scene:CreateChild("Beam")
-        bn.position = b[1]
-        bn.scale = b[2]
-        local bm = bn:CreateComponent("StaticModel")
-        bm:SetModel(cache:GetResource("Model", "Models/Box.mdl"))
-        bm:SetMaterial(beamMat)
-        bm.castShadows = true
-    end
-
     -- ===================== 隐形碰撞墙（防止角色逃出）=====================
     local collWallH = 3.0
-    CreateInvisibleWall(scene, Vector3(0, collWallH / 2, D / 2 + wallT),
+    CreateInvisibleWall(scene, Vector3(0, collWallH / 2, D / 2 + 0.2),
         Vector3(W + 1, collWallH, 0.3))
-    CreateInvisibleWall(scene, Vector3(0, collWallH / 2, -D / 2 - wallT),
+    CreateInvisibleWall(scene, Vector3(0, collWallH / 2, -D / 2 - 0.2),
         Vector3(W + 1, collWallH, 0.3))
-    CreateInvisibleWall(scene, Vector3(-W / 2 - wallT, collWallH / 2, 0),
+    CreateInvisibleWall(scene, Vector3(-W / 2 - 0.2, collWallH / 2, 0),
         Vector3(0.3, collWallH, D + 1))
-    CreateInvisibleWall(scene, Vector3(W / 2 + wallT, collWallH / 2, 0),
+    CreateInvisibleWall(scene, Vector3(W / 2 + 0.2, collWallH / 2, 0),
         Vector3(0.3, collWallH, D + 1))
 
-    print("[Arena] Kazimierz-style arena created: " .. W .. "x" .. D .. "m")
+    print("[Arena] Stadium 3D model loaded: " .. W .. "x" .. D .. "m")
 end
 
 return M
