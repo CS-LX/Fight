@@ -6,6 +6,7 @@
 
 local UI = require("urhox-libs/UI")
 local Economy = require("economy.Economy")
+local Anim = require("ui.UIAnimations")
 
 local M = {}
 
@@ -287,6 +288,10 @@ function M.BuildUI(redCount, blueCount, spineLayer)
     }
 
     UI.SetRoot(root_)
+
+    -- 入场动效
+    Anim.SlideInFromTop(topBar, { duration = 0.4, distance = 40, ease = "cubicout" })
+    Anim.SlideInFromBottom(bottomBar, { duration = 0.5, distance = 60, ease = "backout", delay = 0.15 })
 end
 
 return M
