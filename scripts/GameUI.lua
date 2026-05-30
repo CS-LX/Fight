@@ -2,7 +2,7 @@
 -- GameUI.lua - 游戏 HUD（战斗阶段精美 UI）
 -- ============================================================================
 -- 职责：战斗阶段的 UI 层（计分、状态、胜负、重置）
--- 设计风格：暗色磨砂 + 金色高光 + 描边文字
+-- 设计风格：PixelForge 像素复古风
 
 local UI = require("urhox-libs/UI")
 local Config = require("Config")
@@ -11,21 +11,40 @@ local CharRender = require("render.CharRender")
 local M = {}
 
 -- ============================================================================
--- 设计常量
+-- PixelForge 像素风设计常量
 -- ============================================================================
 
+-- Button shadow: 3px hard drop + top-left bevel (Buttons ONLY)
+local PIXEL_SHADOW = {
+    { x = 3, y = 3, blur = 0, color = {10, 10, 26, 204} },
+    { x = -1, y = -1, blur = 0, color = {255, 255, 255, 48} },
+}
+
 local COLORS = {
-    headerBg    = { 25, 20, 40, 250 },
-    gold        = { 255, 215, 60, 255 },
-    white       = { 255, 255, 255, 255 },
-    redText     = { 255, 90, 90, 255 },
-    blueText    = { 90, 150, 255, 255 },
-    dimText     = { 180, 180, 180, 230 },
-    btnBg       = { 55, 45, 85, 250 },
-    btnHover    = { 75, 60, 110, 255 },
-    btnPress    = { 40, 30, 65, 255 },
-    statusGold  = { 255, 230, 80, 255 },
-    shadow      = { 0, 0, 0, 180 },
+    -- PixelForge 标准色板
+    background  = { 15, 15, 35, 255 },     -- #0F0F23
+    surface     = { 27, 27, 58, 255 },     -- #1B1B3A
+    surfaceHover= { 37, 37, 80, 255 },     -- #252550
+    primary     = { 33, 189, 174, 255 },   -- #21BDAE teal
+    primaryDark = { 25, 168, 153, 255 },   -- #19A899
+    secondary   = { 108, 92, 231, 255 },   -- #6C5CE7 purple
+    text        = { 240, 240, 240, 255 },  -- #F0F0F0
+    textMuted   = { 160, 160, 192, 255 },  -- #A0A0C0
+    border      = { 58, 58, 106, 255 },    -- #3A3A6A
+    -- 队伍颜色
+    redText     = { 255, 71, 87, 255 },    -- #FF4757
+    blueText    = { 69, 170, 242, 255 },   -- #45AAF2
+    -- 功能色
+    gold        = { 255, 217, 61, 255 },   -- #FFD93D
+    white       = { 240, 240, 240, 255 },
+    shadow      = { 10, 10, 26, 204 },
+    -- 按钮色
+    btnPrimary  = { 33, 189, 174, 255 },
+    btnHover    = { 61, 208, 193, 255 },
+    btnPress    = { 25, 168, 153, 255 },
+    btnDanger   = { 255, 71, 87, 255 },
+    btnDangerHover = { 255, 107, 122, 255 },
+    btnDangerPress = { 200, 50, 60, 255 },
 }
 
 -- UI 引用
@@ -42,11 +61,58 @@ local topBar_ = nil
 ---@type Widget|nil
 local gradientBg_ = nil
 
---- 初始化 UI 系统
+--- 初始化 UI 系统（PixelForge 像素风主题）
 function M.Init()
+    local PixelForgeTheme = UI.Theme.ExtendTheme(UI.Theme.defaultTheme, {
+        colors = {
+            primary = {33, 189, 174, 255},
+            primaryHover = {61, 208, 193, 255},
+            primaryPressed = {25, 168, 153, 255},
+            secondary = {108, 92, 231, 255},
+            secondaryHover = {133, 119, 237, 255},
+            secondaryPressed = {90, 75, 214, 255},
+            background = {15, 15, 35, 255},
+            surface = {27, 27, 58, 255},
+            surfaceHover = {37, 37, 80, 255},
+            text = {240, 240, 240, 255},
+            textSecondary = {160, 160, 192, 255},
+            textDisabled = {80, 80, 112, 255},
+            border = {58, 58, 106, 255},
+            borderFocus = {33, 189, 174, 255},
+            disabled = {42, 42, 74, 255},
+            disabledText = {80, 80, 112, 255},
+            success = {80, 200, 120, 255},
+            warning = {255, 217, 61, 255},
+            error = {255, 71, 87, 255},
+            overlay = {0, 0, 0, 180},
+        },
+        radius = {
+            sm = 0, md = 0, lg = 0, xl = 0, full = 0,
+        },
+        componentDefaults = {
+            borderRadius = 0,
+        },
+        components = {
+            Button = { borderWidth = 2, boxShadow = PIXEL_SHADOW },
+            Card = {
+                borderWidth = 2,
+                boxShadow = {
+                    { x = 4, y = 4, blur = 0, color = {10, 10, 26, 204} },
+                },
+            },
+        },
+    })
+
     UI.Init({
+        theme = PixelForgeTheme,
         fonts = {
-            { family = "sans", weights = { normal = "Fonts/MiSans-Regular.ttf" } }
+            { family = "sans", weights = {
+                normal = "Fonts/FusionPixel-12px-Prop-zh_hans.ttf",
+                bold = "Fonts/FusionPixel-12px-Prop-zh_hans-Bold.ttf",
+            }},
+            { family = "mono", weights = {
+                normal = "Fonts/FusionPixel-12px-Mono-zh_hans.ttf",
+            }},
         },
         scale = UI.Scale.DEFAULT,
     })
@@ -57,7 +123,7 @@ function M.Shutdown()
     UI.Shutdown()
 end
 
---- 创建战斗阶段 HUD（含角色 Spine 层 + 精美顶部 HUD + 底部按钮）
+--- 创建战斗阶段 HUD（含角色 Spine 层 + 像素风顶部 HUD + 底部按钮）
 ---@param characters table[] 逻辑数据列表
 ---@param onReset function 重置回调
 function M.CreateBattleHUD(characters, onReset)
@@ -72,62 +138,63 @@ function M.CreateBattleHUD(characters, onReset)
         else blueCount = blueCount + 1 end
     end
 
-    -- === 顶部 HUD 栏 ===
+    -- === 顶部 HUD 栏（像素风） ===
     -- 红方计数
     local redDot = UI.Panel {
-        width = 12, height = 12,
-        borderRadius = 6,
+        width = 10, height = 10,
         bgColor = COLORS.redText,
-        shadowBlur = 4,
-        shadowColor = { 255, 60, 60, 120 },
+        borderWidth = 1,
+        borderColor = { 180, 40, 50, 255 },
     }
     redCountLabel_ = UI.Label {
         text = tostring(redCount),
-        fontSize = 22,
-        fontColor = COLORS.white,
-        textStroke = { width = 1.5, color = { 150, 30, 30, 255 } },
-        marginLeft = 6,
+        fontSize = 18,
+        fontWeight = "bold",
+        fontColor = COLORS.redText,
+        marginLeft = 4,
     }
 
     -- VS
     statusLabel_ = UI.Label {
         text = "FIGHT!",
-        fontSize = 20,
-        fontColor = COLORS.statusGold,
-        textStroke = { width = 1.5, color = { 80, 60, 0, 200 } },
-        textShadow = { offsetX = 0, offsetY = 1, blur = 3, color = { 0, 0, 0, 150 } },
+        fontSize = 18,
+        fontWeight = "bold",
+        fontColor = COLORS.gold,
     }
 
     -- 蓝方计数
     local blueDot = UI.Panel {
-        width = 12, height = 12,
-        borderRadius = 6,
+        width = 10, height = 10,
         bgColor = COLORS.blueText,
-        shadowBlur = 4,
-        shadowColor = { 60, 100, 255, 120 },
+        borderWidth = 1,
+        borderColor = { 40, 120, 180, 255 },
     }
     blueCountLabel_ = UI.Label {
         text = tostring(blueCount),
-        fontSize = 22,
-        fontColor = COLORS.white,
-        textStroke = { width = 1.5, color = { 30, 40, 150, 255 } },
-        marginRight = 6,
+        fontSize = 18,
+        fontWeight = "bold",
+        fontColor = COLORS.blueText,
+        marginRight = 4,
     }
 
-    -- 渐变背景（单一平滑渐变，中点通过颜色插值移动）
+    -- 红蓝渐变背景（线性渐变：左红→右蓝）
     gradientBg_ = UI.Panel {
         position = "absolute",
         top = 0, left = 0, right = 0, bottom = 0,
-        bgColor = { 0, 0, 0, 0 },
-        backgroundGradient = { type = "linear", direction = "to-right", from = { 200, 50, 50, 240 }, to = { 40, 80, 210, 240 } },
+        backgroundGradient = {
+            type = "linear",
+            direction = "to-right",
+            from = { 120, 30, 40, 255 },
+            to = { 30, 50, 120, 255 },
+        },
     }
 
     local topBar = UI.Panel {
         position = "absolute",
         top = 0, left = 0, right = 0,
-        height = 48,
-        shadowBlur = 6,
-        shadowColor = COLORS.shadow,
+        height = 40,
+        borderWidth = 2,
+        borderColor = COLORS.border,
         children = {
             gradientBg_,
             -- 前景层：文字内容
@@ -137,13 +204,13 @@ function M.CreateBattleHUD(characters, onReset)
                 flexDirection = "row",
                 justifyContent = "center",
                 alignItems = "center",
-                gap = 12,
+                gap = 8,
                 children = {
                     redDot,
                     redCountLabel_,
-                    UI.Panel { width = 20 },
+                    UI.Panel { width = 16 },
                     statusLabel_,
-                    UI.Panel { width = 20 },
+                    UI.Panel { width = 16 },
                     blueCountLabel_,
                     blueDot,
                 }
@@ -152,22 +219,22 @@ function M.CreateBattleHUD(characters, onReset)
     }
     topBar_ = topBar
 
-    -- === 底部重新部署按钮 ===
+    -- === 底部重新部署按钮（像素风 bevel） ===
     local resetBtn = UI.Button {
         text = "REDEPLOY",
         width = 120,
-        height = 38,
-        fontSize = 13,
-        borderRadius = 19,
-        backgroundColor = COLORS.btnBg,
-        hoverBackgroundColor = COLORS.btnHover,
-        pressedBackgroundColor = COLORS.btnPress,
+        height = 36,
+        fontSize = 12,
+        fontWeight = "bold",
+        backgroundColor = COLORS.secondary,
+        hoverBackgroundColor = { 133, 119, 237, 255 },
+        pressedBackgroundColor = { 90, 75, 214, 255 },
         textColor = COLORS.white,
-        shadowBlur = 4,
-        shadowColor = { 0, 0, 0, 100 },
+        borderWidth = 2,
+        borderColor = { 80, 65, 180, 255 },
         position = "absolute",
-        bottom = 16,
-        right = 16,
+        bottom = 12,
+        right = 12,
         onClick = function(self)
             if onReset then onReset() end
         end,
@@ -181,16 +248,15 @@ function M.CreateBattleHUD(characters, onReset)
         alignItems = "center",
         bgColor = { 0, 0, 0, 0 },
         opacity = 0,
-        transition = "opacity 0.5s easeOut",
+        transition = "opacity 0.4s easeOut",
         pointerEvents = "box-none",
         children = {
             UI.Label {
                 id = "resultText",
                 text = "",
-                fontSize = 36,
+                fontSize = 28,
+                fontWeight = "bold",
                 fontColor = COLORS.gold,
-                textStroke = { width = 2, color = { 60, 40, 0, 255 } },
-                textShadow = { offsetX = 0, offsetY = 3, blur = 8, color = { 0, 0, 0, 200 } },
             },
         },
     }
@@ -222,10 +288,6 @@ function M.UpdateCounts(redAlive, blueAlive)
     end
 end
 
--- 渐变端点颜色
-local RED_COLOR = { 200, 50, 50, 240 }
-local BLUE_COLOR = { 40, 80, 210, 240 }
-
 --- 颜色插值
 local function lerpColor(a, b, t)
     return {
@@ -236,35 +298,30 @@ local function lerpColor(a, b, t)
     }
 end
 
---- 更新血量比例渐变（平滑移动渐变中点）
---- redRatio/blueRatio: 各队当前HP / 初始HP (0~1)
+local RED_FULL = { 180, 40, 50, 255 }
+local RED_DIM = { 80, 25, 35, 255 }
+local BLUE_FULL = { 40, 70, 180, 255 }
+local BLUE_DIM = { 25, 35, 80, 255 }
+
+--- 更新血量比例（渐变颜色强度随 HP 变化）
 ---@param redRatio number 红方HP系数 (currentHP/initialHP)
 ---@param blueRatio number 蓝方HP系数 (currentHP/initialHP)
 function M.UpdateHPRatio(redRatio, blueRatio)
     if not gradientBg_ then return end
-    -- shift: >0 红方优势，<0 蓝方优势（范围约 -1~1）
-    local sum = redRatio + blueRatio
-    if sum <= 0 then return end
-    local shift = (redRatio - blueRatio) / sum  -- -1 ~ 1
-
-    -- 通过插值 from/to 颜色模拟中点偏移
-    -- shift > 0 (红优): from 保持红，to 向红偏移 → 红色占比增大
-    -- shift < 0 (蓝优): from 向蓝偏移，to 保持蓝 → 蓝色占比增大
-    local fromColor, toColor
-    if shift >= 0 then
-        fromColor = RED_COLOR
-        toColor = lerpColor(BLUE_COLOR, RED_COLOR, shift * 0.6)
-    else
-        fromColor = lerpColor(RED_COLOR, BLUE_COLOR, (-shift) * 0.6)
-        toColor = BLUE_COLOR
-    end
-
+    -- 红方血量越多红色越亮，蓝方同理
+    local fromColor = lerpColor(RED_DIM, RED_FULL, math.min(redRatio, 1.0))
+    local toColor = lerpColor(BLUE_DIM, BLUE_FULL, math.min(blueRatio, 1.0))
     gradientBg_:SetStyle({
-        backgroundGradient = { type = "linear", direction = "to-right", from = fromColor, to = toColor }
+        backgroundGradient = {
+            type = "linear",
+            direction = "to-right",
+            from = fromColor,
+            to = toColor,
+        },
     })
 end
 
---- 显示胜利信息（大字居中 + 遮罩渐显）
+--- 显示胜利信息（像素风大字居中）
 ---@param message string
 function M.ShowResult(message)
     if statusLabel_ then
@@ -275,7 +332,7 @@ function M.ShowResult(message)
         if textWidget then
             textWidget:SetText(message)
         end
-        resultOverlay_:SetStyle({ opacity = 1, bgColor = { 0, 0, 0, 120 } })
+        resultOverlay_:SetStyle({ opacity = 1, bgColor = { 10, 10, 26, 160 } })
     end
 end
 
