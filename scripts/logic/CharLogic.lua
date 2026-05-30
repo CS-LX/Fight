@@ -23,6 +23,8 @@ function M.Create(moduleId, team, spawnPos)
     local attackDamage = mod and mod.config.attackDamage or Config.AttackDamage
     local attackRange = mod and mod.config.attackRange or Config.AttackRange
     local attackCooldownMax = mod and mod.config.attackCooldown or Config.AttackCooldown
+    local stopDistance = mod and mod.config.stopDistance or 0.6
+    local collisionRadius = mod and mod.config.collisionRadius or 0.4
     local aiProfile = mod and mod.ai.profile or "aggressive"
 
     local char = {
@@ -43,6 +45,8 @@ function M.Create(moduleId, team, spawnPos)
         attackRange = attackRange,
         attackCooldownMax = attackCooldownMax,
         attackCooldown = 0,
+        stopDistance = stopDistance,
+        collisionRadius = collisionRadius,
 
         -- AI
         aiProfile = aiProfile,

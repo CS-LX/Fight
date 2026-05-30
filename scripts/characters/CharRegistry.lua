@@ -31,6 +31,8 @@ local function CreateWisdelPreset()
             attackDamage = 10,
             attackRange = 1.2,
             attackCooldown = 0.8,
+            stopDistance = 0.6,
+            collisionRadius = 0.4,
         },
         art = {
             avatar = "image/edited_wisdel_avatar_20260529105147.png",
@@ -63,6 +65,8 @@ local function CreateBloodyWolfPreset()
             attackDamage = 10,
             attackRange = 1.2,
             attackCooldown = 0.8,
+            stopDistance = 0.4,
+            collisionRadius = 0.25,
         },
         art = {
             mode = "sprite_bone",

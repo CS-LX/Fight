@@ -42,8 +42,8 @@ local deployedUnits_ = {}
 --- 部署删除距离阈值（米）
 local DEPLOY_REMOVE_DIST = 1.5
 
---- 角色碰撞半径（米），用于行动时互相排斥
-local CHAR_COLLISION_RADIUS = 0.6
+--- 角色默认碰撞半径（米），用于行动时互相排斥（当角色未配置时的 fallback）
+local CHAR_COLLISION_RADIUS_DEFAULT = 0.4
 
 -- ============================================================================
 -- 生命周期
@@ -375,14 +375,16 @@ function UpdateGameLogic(dt)
         end
     end
 
-    -- 碰撞分离：防止角色重叠（简单圆形排斥）
-    local minDist = CHAR_COLLISION_RADIUS * 2
+    -- 碰撞分离：防止角色重叠（简单圆形排斥，使用各自的 collisionRadius）
     for i = 1, #characters_ do
         local a = characters_[i]
         if a.state ~= "dead" and a.state ~= "dying" then
+            local radiusA = a.collisionRadius or CHAR_COLLISION_RADIUS_DEFAULT
             for j = i + 1, #characters_ do
                 local b = characters_[j]
                 if b.state ~= "dead" and b.state ~= "dying" then
+                    local radiusB = b.collisionRadius or CHAR_COLLISION_RADIUS_DEFAULT
+                    local minDist = radiusA + radiusB
                     local dx = b.worldPos.x - a.worldPos.x
                     local dz = b.worldPos.z - a.worldPos.z
                     local dist = math.sqrt(dx * dx + dz * dz)

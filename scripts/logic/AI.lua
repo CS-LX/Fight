@@ -144,9 +144,9 @@ local function Chase()
             local dz = enemy.worldPos.z - char.worldPos.z
             local dist = math.sqrt(dx * dx + dz * dz)
 
-            local range = char.attackRange * ctx.profileParams.attackRangeMul
-            if dist <= range then
-                task:success()  -- 已经到达攻击范围
+            local stopDist = char.stopDistance or (char.attackRange * ctx.profileParams.attackRangeMul)
+            if dist <= stopDist then
+                task:success()  -- 已经到达停止距离
                 return
             end
 

@@ -61,6 +61,8 @@ local attr_hpSlider_ = nil
 local attr_damageSlider_ = nil
 local attr_rangeSlider_ = nil
 local attr_cooldownSlider_ = nil
+local attr_stopDistSlider_ = nil
+local attr_collisionRadiusSlider_ = nil
 local attr_scaleSlider_ = nil
 
 -- 外观面板控件
@@ -134,6 +136,8 @@ local function ReadConfigFromUI()
         attackDamage = attr_damageSlider_:GetValue(),
         attackRange = attr_rangeSlider_:GetValue() * 0.1,
         attackCooldown = attr_cooldownSlider_:GetValue() * 0.1,
+        stopDistance = attr_stopDistSlider_:GetValue() * 0.1,
+        collisionRadius = attr_collisionRadiusSlider_:GetValue() * 0.01,
     }
 end
 
@@ -426,6 +430,8 @@ local function CreateAttributesPanel(mod)
     attr_damageSlider_ = UI.Slider { value = c.attackDamage, min = 5, max = 50, step = 1, width = "100%" }
     attr_rangeSlider_ = UI.Slider { value = math.floor(c.attackRange * 10 + 0.5), min = 8, max = 25, step = 1, width = "100%" }
     attr_cooldownSlider_ = UI.Slider { value = math.floor(c.attackCooldown * 10 + 0.5), min = 3, max = 20, step = 1, width = "100%" }
+    attr_stopDistSlider_ = UI.Slider { value = math.floor((c.stopDistance or 0.6) * 10 + 0.5), min = 2, max = 15, step = 1, width = "100%" }
+    attr_collisionRadiusSlider_ = UI.Slider { value = math.floor((c.collisionRadius or 0.4) * 100 + 0.5), min = 10, max = 80, step = 1, width = "100%" }
     attr_scaleSlider_ = UI.Slider { value = math.floor(mod.art.renderScale * 100 + 0.5), min = 10, max = 60, step = 1, width = "100%" }
 
     return UI.Panel {
@@ -452,6 +458,9 @@ local function CreateAttributesPanel(mod)
                             PropLabel("攻击伤害"), attr_damageSlider_,
                             PropLabel("攻击范围 (×0.1 m)"), attr_rangeSlider_,
                             PropLabel("攻击冷却 (×0.1 s)"), attr_cooldownSlider_,
+                            SectionLabel("── 距离判定 ──"),
+                            PropLabel("停止距离 (×0.1 m)"), attr_stopDistSlider_,
+                            PropLabel("碰撞半径 (×0.01 m)"), attr_collisionRadiusSlider_,
                             SectionLabel("── 渲染 ──"),
                             PropLabel("角色缩放 (×0.01)"), attr_scaleSlider_,
                         },
@@ -945,6 +954,8 @@ function M.Close()
     attr_damageSlider_ = nil
     attr_rangeSlider_ = nil
     attr_cooldownSlider_ = nil
+    attr_stopDistSlider_ = nil
+    attr_collisionRadiusSlider_ = nil
     attr_scaleSlider_ = nil
     app_sliderR_ = nil
     app_sliderG_ = nil

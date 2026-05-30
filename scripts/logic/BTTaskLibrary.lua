@@ -245,8 +245,8 @@ M.Register("Chase", {
                 local dz = enemy.worldPos.z - char.worldPos.z
                 local dist = math.sqrt(dx * dx + dz * dz)
 
-                local range = char.attackRange * (ctx.profileParams and ctx.profileParams.attackRangeMul or 1.0)
-                if dist <= range then task:success() return end
+                local stopDist = char.stopDistance or (char.attackRange * (ctx.profileParams and ctx.profileParams.attackRangeMul or 1.0))
+                if dist <= stopDist then task:success() return end
 
                 local invDist = 1.0 / dist
                 local speed = char.speed * (ctx.profileParams and ctx.profileParams.chaseSpeedMul or 1.0)
