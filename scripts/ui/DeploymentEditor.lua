@@ -506,7 +506,6 @@ function M.Open(opts)
             hintLabel_,
             startBtn_,
             clearBtn,
-            makerBtn,
             backBtn,
         }
     }

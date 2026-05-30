@@ -148,7 +148,7 @@ end
 -- 智能选角
 -- ============================================================================
 
---- 从可用角色池中选择 N 个角色（带多样性）
+--- 从可用角色池中选择 N 个角色（带多样性、质量保证）
 ---@param count number 需要选择的角色数
 ---@param budget number|nil 可选总power预算（用于均衡）
 ---@return string[] moduleIds 选中的角色模块ID列表
@@ -175,20 +175,26 @@ function M.SelectCharacters(count, budget)
         return result, count * 50
     end
 
-    -- 按 power 排序，用于预算控制
+    -- 按 power 排序（强到弱）
     table.sort(pool, function(a, b) return a.power > b.power end)
+
+    -- 计算平均 power（用于质量控制）
+    local avgPower = 0
+    for _, e in ipairs(pool) do avgPower = avgPower + e.power end
+    avgPower = avgPower / #pool
 
     local selected = {}
     local totalPower = 0
     local usedCount = {}  -- 限制同一角色重复次数
 
-    -- 策略：尝试保证至少1个坦克、至少1个远程（如果有的话）
+    -- 策略：保证阵容结构完整（坦克+远程+近战均有）
     local hasTank = false
     local hasRanged = false
+    local weakCount = 0  -- 统计弱角色数量（power < 平均 * 0.7）
 
     for i = 1, count do
         local best = nil
-        local bestScore = -1
+        local bestScore = -math.huge
 
         for _, entry in ipairs(pool) do
             -- 限制同一角色最多出现2次
@@ -197,24 +203,38 @@ function M.SelectCharacters(count, budget)
 
             local score = 0
 
-            -- 基础分：加入随机性避免每次一样
-            score = score + math.random() * 20
+            -- 基础分：适度随机（范围缩小，降低全弱概率）
+            score = score + math.random() * 15
 
-            -- 角色多样性加分
+            -- power 质量分：偏向中高 power 角色（避免全选弱鸡）
+            -- 归一化到 0~30 分
+            local powerRatio = entry.power / math.max(avgPower, 1)
+            score = score + math.min(powerRatio * 15, 30)
+
+            -- 弱角色惩罚：如果已经选了太多弱角色，降低继续选弱角色的概率
+            if entry.power < avgPower * 0.7 then
+                score = score - weakCount * 12
+            end
+
+            -- 角色多样性加分（结构保证）
             if not hasTank and entry.role == "tank" then
-                score = score + 30
+                score = score + 35
             end
             if not hasRanged and entry.role == "ranged" then
-                score = score + 25
+                score = score + 30
+            end
+
+            -- 多样性：已有相同角色时降分
+            if used > 0 then
+                score = score - used * 10
             end
 
             -- 预算控制：如果有预算限制，偏向让总power接近目标
             if budget and budget > 0 then
                 local remaining = budget - totalPower
                 local avgRemaining = remaining / (count - i + 1)
-                -- 越接近平均值越好
                 local deviation = math.abs(entry.power - avgRemaining)
-                score = score - deviation * 0.1
+                score = score - deviation * 0.15
             end
 
             if score > bestScore then
@@ -230,9 +250,10 @@ function M.SelectCharacters(count, budget)
             usedCount[best.id] = (usedCount[best.id] or 0) + 1
             if best.role == "tank" then hasTank = true end
             if best.role == "ranged" then hasRanged = true end
+            if best.power < avgPower * 0.7 then weakCount = weakCount + 1 end
         else
-            -- fallback
-            local fallback = pool[math.random(1, #pool)]
+            -- fallback: 从强角色中选
+            local fallback = pool[math.random(1, math.max(1, math.ceil(#pool * 0.5)))]
             table.insert(selected, fallback.id)
             totalPower = totalPower + fallback.power
         end

@@ -189,7 +189,18 @@ function EnterDeployment(ranked)
     local spineLayer = CharRender.CreateEmptyContainer()
 
     -- PvAI 模式：部署 AI 蓝方角色（本地阵型 AI）
-    local aiConfig = ranked and Ranked.GetAIConfig() or { teamSize = math.random(3, 5), statMultiplier = 1.0 }
+    -- AI teamSize 基于玩家经济水平：玩家金币能买多少单位，AI 就匹配 70~90%
+    local aiConfig
+    if ranked then
+        aiConfig = Ranked.GetAIConfig()
+    else
+        local playerGold = Economy.GetBalance()
+        local costPerUnit = Economy.Config.DEPLOY_COST_PER_UNIT
+        local playerMaxUnits = math.floor(playerGold / costPerUnit)
+        -- AI 部署数 = 玩家最大部署数的 70%~90%，至少3个，最多8个
+        local aiSize = math.max(3, math.min(8, math.floor(playerMaxUnits * (0.7 + math.random() * 0.2))))
+        aiConfig = { teamSize = aiSize, statMultiplier = 1.0 }
+    end
     local aiChars = AIDeployer.DeployTeam("blue", aiConfig.teamSize, nil, aiConfig.statMultiplier)
     for _, char in ipairs(aiChars) do
         table.insert(characters_, char)
