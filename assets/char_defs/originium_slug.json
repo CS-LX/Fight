@@ -23,7 +23,7 @@
       "die": "Die",
       "relax": "Default"
     },
-    "renderScale": 0.35
+    "renderScale": 0.2625
   },
   "ai": {
     "profile": "swarm",

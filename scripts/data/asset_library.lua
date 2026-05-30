@@ -10,7 +10,7 @@ local M = {}
 M.spines = {
     {
         id = "wisdel",
-        name = "Wisdel (默认)",
+        name = "维维美 (默认)",
         src = "spine/build_char_1035_wisdel_game_9/build_char_1035_wisdel_game_9.skel",
         pma = true,
         anims = { "Default", "Move", "Interact", "Sleep", "Relax" },
@@ -29,8 +29,8 @@ M.spines = {
 M.sprites = {
     -- 角色（图片素材）
     { id = "bunny", name = "Bunny", category = "character", image = "image/Bunny.png", width = 48, height = 48 },
-    { id = "kisaki", name = "Kisaki", category = "character", image = "image/Kisaki.png", width = 48, height = 48 },
-    { id = "kisaki_nocoke", name = "Kisaki (No Coke)", category = "character", image = "image/Kisaki_NoCoke.png", width = 48, height = 48 },
+    { id = "kisaki", name = "小咲", category = "character", image = "image/Kisaki.png", width = 48, height = 48 },
+    { id = "kisaki_nocoke", name = "小咲 (No Coke)", category = "character", image = "image/Kisaki_NoCoke.png", width = 48, height = 48 },
     -- 投射物
     { id = "coke", name = "Coke Can", category = "projectile", image = "image/Coke.png", width = 24, height = 24 },
     -- 头部

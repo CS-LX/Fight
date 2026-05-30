@@ -14,7 +14,7 @@
 
 local M = {
     id = "wisdel",
-    name = "Wisdel",
+    name = "维维美",
 
     -- Spine 资源
     spineSrc = "spine/build_char_1035_wisdel_game_9/build_char_1035_wisdel_game_9.skel",
