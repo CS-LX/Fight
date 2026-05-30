@@ -274,6 +274,9 @@ function M.Update(char, characters, dt)
     -- 更新攻击冷却
     char.attackCooldown = math.max(0, char.attackCooldown - dt)
 
+    -- 动画锁定期间（受击/攻击）跳过行为树，避免覆盖 animState
+    if char.animTimer and char.animTimer > 0 then return end
+
     -- 懒创建行为树（优先使用自定义树）
     if not trees_[char] then
         if customTreeData_ then

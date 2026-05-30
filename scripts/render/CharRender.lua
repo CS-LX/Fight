@@ -8,6 +8,7 @@ local UI = require("urhox-libs/UI")
 local Config = require("Config")
 local CharRegistry = require("characters.CharRegistry")
 local AssetLibrary = require("data.asset_library")
+local flux = require("libs.flux")
 
 local M = {}
 
@@ -66,7 +67,7 @@ local function CreateSpriteBonePanel(def)
     end
     local panel = UI.Panel(props)
 
-    -- 覆盖 Render 方法以支持 flipX（UI.Panel 原生不支持非 uniform scale）
+    -- 覆盖 Render 方法以支持 flipX + 受击红色叠加
     local originalRender = panel.Render
     function panel:Render(nvg)
         if self.props.flipX then
@@ -80,6 +81,15 @@ local function CreateSpriteBonePanel(def)
             nvgRestore(nvg)
         else
             self:RenderFullBackground(nvg)
+        end
+        -- 受击红色叠加层
+        local hitAlpha = self.hitOverlayAlpha or 0
+        if hitAlpha > 0 then
+            local l = self:GetAbsoluteLayout()
+            nvgBeginPath(nvg)
+            nvgRoundedRect(nvg, l.x, l.y, l.w, l.h, 4)
+            nvgFillColor(nvg, nvgRGBA(255, 50, 50, math.floor(hitAlpha * 255)))
+            nvgFill(nvg)
         end
     end
 
@@ -441,6 +451,42 @@ local function UpdateAnimation(char)
     end
 end
 
+--- 触发受击变红效果
+---@param char table
+---@param rd table
+local function TriggerHitFlash(char, rd)
+    -- 已在闪红中则不重复触发
+    if rd.hitFlashing then return end
+    rd.hitFlashing = true
+
+    local def = GetArtDef(char.defId)
+
+    if rd.spine.SetColor then
+        -- Spine 模式：染色 tween
+        rd.hitTint = { r = 1.0, g = 0.2, b = 0.2 }
+        local baseR = (def.tint and def.tint.r) or 1.0
+        local baseG = (def.tint and def.tint.g) or 1.0
+        local baseB = (def.tint and def.tint.b) or 1.0
+        flux.to(rd.hitTint, 0.3, { r = baseR, g = baseG, b = baseB })
+            :ease("cubicout")
+            :oncomplete(function()
+                rd.hitFlashing = false
+                rd.hitTint = nil
+            end)
+    else
+        -- sprite_bone 模式：红色叠加层透明度 tween
+        rd.hitOverlay = { alpha = 0.6 }
+        rd.spine.hitOverlayAlpha = 0.6
+        flux.to(rd.hitOverlay, 0.35, { alpha = 0 })
+            :ease("cubicout")
+            :oncomplete(function()
+                rd.hitFlashing = false
+                rd.hitOverlay = nil
+                rd.spine.hitOverlayAlpha = 0
+            end)
+    end
+end
+
 --- 更新死亡表现（淡出效果，保留 tint 染色）
 ---@param char table
 local function UpdateDyingVisual(char)
@@ -473,6 +519,10 @@ end
 ---@param dt number|nil 帧时间（可选，用于 sprite_bone 动画）
 function M.Update(characters, camera, dt)
     frameCount_ = frameCount_ + 1
+
+    -- 驱动 flux tween 动画
+    local frameDt0 = dt or 0.016
+    flux.update(frameDt0)
 
     -- 使用 UI 系统的 base pixel 坐标空间
     local uiScale = UI.GetScale()
@@ -525,6 +575,21 @@ function M.Update(characters, camera, dt)
             local def = GetArtDef(char.defId)
             UpdateSpriteBoneAnimation(char, rd, frameDt, def)
         end
+
+        -- 受击闪红检测：animState 切到 "hit" 时触发
+        if char.animState == "hit" and not rd.hitFlashing then
+            TriggerHitFlash(char, rd)
+        end
+
+        -- 应用受击染色
+        if rd.hitTint and rd.spine.SetColor then
+            -- Spine 模式：直接设置颜色
+            rd.spine:SetColor(rd.hitTint.r, rd.hitTint.g, rd.hitTint.b, 1.0)
+        elseif rd.hitOverlay then
+            -- sprite_bone 模式：同步叠加层透明度到 panel
+            rd.spine.hitOverlayAlpha = rd.hitOverlay.alpha
+        end
+
         UpdateDyingVisual(char)
 
         if char.state == "dead" then goto continue end
