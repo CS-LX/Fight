@@ -7,6 +7,7 @@
 local UI = require("urhox-libs/UI")
 local Config = require("Config")
 local CharRender = require("render.CharRender")
+local Anim = require("ui.UIAnimations")
 
 local M = {}
 
@@ -60,6 +61,10 @@ local resultOverlay_ = nil
 local topBar_ = nil
 ---@type Widget|nil
 local gradientBg_ = nil
+
+-- 动效追踪
+local prevRedCount_ = -1
+local prevBlueCount_ = -1
 
 --- 初始化 UI 系统（PixelForge 像素风主题）
 function M.Init()
@@ -274,17 +279,31 @@ function M.CreateBattleHUD(characters, onReset)
     }
 
     UI.SetRoot(root)
+
+    -- === 入场动画 ===
+    Anim.SlideInFromTop(topBar, { duration = 0.5, distance = 50, ease = "backout" })
+    Anim.FadeIn(resetBtn, { duration = 0.4, delay = 0.3 })
 end
 
---- 更新队伍存活计数
+--- 更新队伍存活计数（带数字滚动动效）
 ---@param redAlive number
 ---@param blueAlive number
 function M.UpdateCounts(redAlive, blueAlive)
     if redCountLabel_ then
-        redCountLabel_:SetText(tostring(redAlive))
+        if prevRedCount_ >= 0 and prevRedCount_ ~= redAlive then
+            Anim.CountUp(redCountLabel_, prevRedCount_, redAlive, { duration = 0.4 })
+        else
+            redCountLabel_:SetText(tostring(redAlive))
+        end
+        prevRedCount_ = redAlive
     end
     if blueCountLabel_ then
-        blueCountLabel_:SetText(tostring(blueAlive))
+        if prevBlueCount_ >= 0 and prevBlueCount_ ~= blueAlive then
+            Anim.CountUp(blueCountLabel_, prevBlueCount_, blueAlive, { duration = 0.4 })
+        else
+            blueCountLabel_:SetText(tostring(blueAlive))
+        end
+        prevBlueCount_ = blueAlive
     end
 end
 
@@ -344,6 +363,9 @@ function M.ResetStatus()
     if resultOverlay_ then
         resultOverlay_:SetStyle({ opacity = 0, bgColor = { 0, 0, 0, 0 } })
     end
+    -- 重置计数追踪（新战斗开始时首次设置不触发动画）
+    prevRedCount_ = -1
+    prevBlueCount_ = -1
 end
 
 --- 显示战斗结算面板（含收支明细 + 返回按钮）
@@ -472,6 +494,9 @@ function M.ShowSettlement(title, isWin, items, onContinue)
     resultOverlay_:ClearChildren()
     resultOverlay_:AddChild(settlementCard)
     resultOverlay_:SetStyle({ opacity = 1, bgColor = { 10, 10, 26, 200 }, pointerEvents = "auto" })
+
+    -- 结算卡片弹入动画
+    Anim.PopIn(settlementCard, { duration = 0.4, delay = 0.1, ease = "backout" })
 end
 
 return M

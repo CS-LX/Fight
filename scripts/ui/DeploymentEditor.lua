@@ -8,6 +8,7 @@
 
 local UI = require("urhox-libs/UI")
 local CharRegistry = require("characters.CharRegistry")
+local Anim = require("ui.UIAnimations")
 
 local M = {}
 
@@ -521,21 +522,23 @@ function M.Open(opts)
     end
 
     -- 左侧红方面板
-    table.insert(rootChildren, UI.Panel {
+    local leftContainer = UI.Panel {
         position = "absolute",
         left = 4,
         top = 44,
         bottom = 48,
         children = { redPanel },
-    })
+    }
+    table.insert(rootChildren, leftContainer)
     -- 右侧蓝方面板
-    table.insert(rootChildren, UI.Panel {
+    local rightContainer = UI.Panel {
         position = "absolute",
         right = 4,
         top = 44,
         bottom = 48,
         children = { bluePanel },
-    })
+    }
+    table.insert(rootChildren, rightContainer)
     table.insert(rootChildren, header)
     table.insert(rootChildren, footer)
 
@@ -547,6 +550,13 @@ function M.Open(opts)
     }
 
     UI.SetRoot(rootWidget_)
+
+    -- === 入场动画 ===
+    Anim.SlideInFromTop(header, { duration = 0.4, distance = 44, ease = "cubicout" })
+    Anim.SlideInFromBottom(footer, { duration = 0.4, distance = 44, ease = "cubicout", delay = 0.1 })
+    Anim.SlideInFromLeft(leftContainer, { duration = 0.5, distance = 80, ease = "backout", delay = 0.15 })
+    Anim.SlideInFromRight(rightContainer, { duration = 0.5, distance = 80, ease = "backout", delay = 0.15 })
+
     print("[DeploymentEditor] Opened - PixelForge pixel-art UI")
 end
 

@@ -21,6 +21,7 @@ local Economy = require("economy.Economy")
 local AIDeployer = require("logic.AIDeployer")
 local Ranked = require("economy.Ranked")
 local SponsorPool = require("economy.SponsorPool")
+local Anim = require("ui.UIAnimations")
 -- LLM 网络模块（当前仅预留，需 persistent_world 服务端支持）
 -- local LLMClient = require("network.Client")
 
@@ -918,6 +919,7 @@ end
 ---@param eventData UpdateEventData
 function HandleUpdate(eventType, eventData)
     local dt = eventData["TimeStep"]:GetFloat()
+    Anim.Update(dt)
     UpdateGameLogic(dt)
 end
 

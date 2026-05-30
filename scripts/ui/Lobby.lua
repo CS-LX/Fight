@@ -8,6 +8,7 @@
 local UI = require("urhox-libs/UI")
 local Economy = require("economy.Economy")
 local Ranked = require("economy.Ranked")
+local Anim = require("ui.UIAnimations")
 -- LLM 网络模块（当前仅预留，需 persistent_world 服务端支持）
 -- local LLMClient = require("network.Client")
 
@@ -443,6 +444,14 @@ function M.BuildUI()
     }
 
     UI.SetRoot(root_)
+
+    -- === 入场动画 ===
+    Anim.SlideInFromTop(topBar, { duration = 0.4, distance = 44, ease = "cubicout" })
+    Anim.FadeIn(title, { duration = 0.5, delay = 0.15 })
+    Anim.Stagger({ battleCard, rankedCard, spectateCard }, Anim.PopIn, {
+        stagger = 0.08,
+        baseDelay = 0.2,
+    })
 end
 
 --- 创建模式选择卡片
