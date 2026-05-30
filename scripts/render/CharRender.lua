@@ -64,7 +64,26 @@ local function CreateSpriteBonePanel(def)
     else
         props.backgroundColor = bgColor
     end
-    return UI.Panel(props)
+    local panel = UI.Panel(props)
+
+    -- 覆盖 Render 方法以支持 flipX（UI.Panel 原生不支持非 uniform scale）
+    local originalRender = panel.Render
+    function panel:Render(nvg)
+        if self.props.flipX then
+            local l = self:GetAbsoluteLayout()
+            local cx = l.x + l.w / 2
+            nvgSave(nvg)
+            nvgTranslate(nvg, cx, 0)
+            nvgScale(nvg, -1, 1)
+            nvgTranslate(nvg, -cx, 0)
+            self:RenderFullBackground(nvg)
+            nvgRestore(nvg)
+        else
+            self:RenderFullBackground(nvg)
+        end
+    end
+
+    return panel
 end
 
 --- 获取角色的美术配置（从 CharRegistry 模块读取）
@@ -193,6 +212,9 @@ function M.CreateSpines(characters)
             tintApplied = def.tint ~= nil,
             baseWidth = spine.props.width or 48,
             baseHeight = spine.props.height or 64,
+            -- sprite_bone 动画状态
+            sbAnimPhase = "idle",
+            sbAnimTime = 0,
         }
 
         table.insert(children, spine)
@@ -271,6 +293,9 @@ function M.AddOne(char)
         tintApplied = def.tint ~= nil,
         baseWidth = spine.props.width or 48,
         baseHeight = spine.props.height or 64,
+        -- sprite_bone 动画状态
+        sbAnimPhase = "idle",
+        sbAnimTime = 0,
     }
 
     spineContainer_:AddChild(spine)
@@ -285,6 +310,117 @@ function M.RemoveOne(char)
     rd.spine:SetVisible(false)
     if rd.hpBar then rd.hpBar:SetVisible(false) end
     renderData_[char] = nil
+end
+
+-- ============================================================================
+-- sprite_bone 动画插值系统（独立于 Spine，不耦合）
+-- ============================================================================
+
+--- 对 sprite_bone 关键帧进行线性插值
+---@param frames table 关键帧数据 { ["0"] = { body = {x,y,rot,scaleX,scaleY} }, ... }
+---@param duration number 动画总时长
+---@param time number 当前时间
+---@return table bodyTransform {x, y, rot, scaleX, scaleY}
+local function InterpolateSpriteKeyframes(frames, duration, time)
+    -- 收集并排序所有时间点
+    local keys = {}
+    for k in pairs(frames) do
+        table.insert(keys, tonumber(k))
+    end
+    table.sort(keys)
+
+    if #keys == 0 then
+        return { x = 0, y = 0, rot = 0, scaleX = 1, scaleY = 1 }
+    end
+
+    -- 限制时间在 [0, duration]
+    local t = time % duration
+
+    -- 找到 t 所在的两个关键帧之间
+    local prevKey = keys[1]
+    local nextKey = keys[1]
+    for i = 1, #keys do
+        if keys[i] <= t then
+            prevKey = keys[i]
+            nextKey = keys[math.min(i + 1, #keys)]
+        else
+            nextKey = keys[i]
+            break
+        end
+    end
+
+    local prevFrame = frames[tostring(prevKey)]
+    local nextFrame = frames[tostring(nextKey)]
+    if not prevFrame or not nextFrame then
+        return { x = 0, y = 0, rot = 0, scaleX = 1, scaleY = 1 }
+    end
+
+    -- 取 body 骨骼数据
+    local prevBody = prevFrame.body or { x = 0, y = 0, rot = 0, scaleX = 1, scaleY = 1 }
+    local nextBody = nextFrame.body or { x = 0, y = 0, rot = 0, scaleX = 1, scaleY = 1 }
+
+    -- 计算插值因子
+    local alpha = 0
+    if nextKey > prevKey then
+        alpha = (t - prevKey) / (nextKey - prevKey)
+    end
+
+    -- 线性插值
+    return {
+        x = prevBody.x + (nextBody.x - prevBody.x) * alpha,
+        y = prevBody.y + (nextBody.y - prevBody.y) * alpha,
+        rot = prevBody.rot + (nextBody.rot - prevBody.rot) * alpha,
+        scaleX = prevBody.scaleX + (nextBody.scaleX - prevBody.scaleX) * alpha,
+        scaleY = prevBody.scaleY + (nextBody.scaleY - prevBody.scaleY) * alpha,
+    }
+end
+
+--- 更新 sprite_bone 角色的动画状态
+---@param char table 逻辑数据
+---@param rd table 渲染数据
+---@param dt number 帧时间
+---@param def table art 配置
+local function UpdateSpriteBoneAnimation(char, rd, dt, def)
+    if not def.frames then return end
+
+    -- 确定目标动画阶段
+    local targetPhase = char.animState or "idle"
+    if not def.frames[targetPhase] then
+        targetPhase = "idle"
+    end
+
+    -- 阶段切换时重置时间
+    if rd.sbAnimPhase ~= targetPhase then
+        rd.sbAnimPhase = targetPhase
+        rd.sbAnimTime = 0
+    end
+
+    -- 推进时间
+    rd.sbAnimTime = rd.sbAnimTime + dt
+
+    -- 获取当前阶段配置
+    local phaseData = def.frames[targetPhase]
+    if not phaseData then return end
+
+    local duration = phaseData.duration or 1.0
+    local keyframes = phaseData.keyframes
+    if not keyframes then return end
+
+    -- 循环播放（idle/move/relax 循环，attack/hit/die 不循环但在 animState 切走前保持最后帧）
+    local loopPhases = { idle = true, move = true, relax = true }
+    if loopPhases[targetPhase] then
+        -- 循环：取模
+        rd.sbAnimTime = rd.sbAnimTime % duration
+    else
+        -- 非循环：clamp 到最大时长
+        if rd.sbAnimTime > duration then
+            rd.sbAnimTime = duration
+        end
+    end
+
+    -- 插值关键帧
+    local transform = InterpolateSpriteKeyframes(keyframes, duration, rd.sbAnimTime)
+    rd.sbTransform = transform
 end
 
 --- 更新动画状态（根据逻辑层的 animState 切换 Spine 动画）
@@ -334,7 +470,8 @@ end
 --- 每帧更新所有角色的表现（位置、缩放、排序、动画、翻转）
 ---@param characters table[] 逻辑数据列表
 ---@param camera Camera
-function M.Update(characters, camera)
+---@param dt number|nil 帧时间（可选，用于 sprite_bone 动画）
+function M.Update(characters, camera, dt)
     frameCount_ = frameCount_ + 1
 
     -- 使用 UI 系统的 base pixel 坐标空间
@@ -376,12 +513,18 @@ function M.Update(characters, camera)
     -- 收集排序数据
     local sortList = {}
 
+    local frameDt = dt or 0.016  -- 默认 ~60fps
+
     for _, char in ipairs(characters) do
         local rd = renderData_[char]
         if not rd then goto continue end
 
-        -- 更新动画
+        -- 更新动画（Spine / sprite_bone 各走各的路径）
         UpdateAnimation(char)
+        if rd.sbAnimPhase then
+            local def = GetArtDef(char.defId)
+            UpdateSpriteBoneAnimation(char, rd, frameDt, def)
+        end
         UpdateDyingVisual(char)
 
         if char.state == "dead" then goto continue end
@@ -469,15 +612,39 @@ function M.Update(characters, camera)
             -- sprite_bone 模式或 spineInstance 未加载
             local bw = info.rd.baseWidth or 48
             local bh = info.rd.baseHeight or 64
-            local targetW = math.max(1, math.floor(bw * info.scaleValX))
-            local targetH = math.max(1, math.floor(bh * info.scaleValY))
+
+            -- 应用动画关键帧变换（scaleX/scaleY 影响尺寸）
+            local animSX = 1.0
+            local animSY = 1.0
+            local animOffX = 0
+            local animOffY = 0
+            local animRot = 0
+            local sbT = info.rd.sbTransform
+            if sbT then
+                animSX = sbT.scaleX or 1.0
+                animSY = sbT.scaleY or 1.0
+                animOffX = sbT.x or 0
+                animOffY = sbT.y or 0
+                animRot = sbT.rot or 0
+            end
+
+            local targetW = math.max(1, math.floor(bw * info.scaleValX * animSX))
+            local targetH = math.max(1, math.floor(bh * info.scaleValY * animSY))
+
+            -- 偏移量（翻转时 x 方向取反）
+            local offX = info.flip and -animOffX or animOffX
+
             spine:SetStyle({
                 width = targetW,
                 height = targetH,
-                left = math.floor(info.sx - targetW / 2),
-                top = math.floor(info.sy - targetH),
+                left = math.floor(info.sx - targetW / 2 + offX * info.scaleVal),
+                top = math.floor(info.sy - targetH + animOffY * info.scaleVal),
                 zIndex = i,
+                rotate = animRot ~= 0 and animRot or nil,
+                transformOrigin = "center",
             })
+            -- flipX 由自定义 Render 处理（nvgScale(-1,1)）
+            spine.props.flipX = info.flip
         end
 
         -- 也设置 props.flipX（备份：当 dataW > 0 时 Render 内部会用它）

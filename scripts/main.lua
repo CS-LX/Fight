@@ -351,7 +351,7 @@ function UpdateGameLogic(dt)
     if gameState_ == "deployment" then
         -- 部署阶段：角色可见但静止（仅更新渲染位置，不更新 AI）
         if #characters_ > 0 then
-            CharRender.Update(characters_, camera_)
+            CharRender.Update(characters_, camera_, dt)
         end
         return
     end
@@ -409,7 +409,7 @@ function UpdateGameLogic(dt)
     end
 
     -- 表现层更新：Spine 位置/缩放/排序/动画/翻转
-    CharRender.Update(characters_, camera_)
+    CharRender.Update(characters_, camera_, dt)
 
     -- HUD 更新
     GameUI.UpdateCounts(redAlive, blueAlive)

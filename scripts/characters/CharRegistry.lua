@@ -67,7 +67,7 @@ local function CreateBloodyWolfPreset()
         art = {
             mode = "sprite_bone",
             avatar = "image/Bunny.png",
-            renderScale = 2.5,
+            renderScale = 1.25,
             frames = {
                 -- 待机：团子呼吸鼓涌（横向微胀+纵向微缩，交替）
                 idle = {
