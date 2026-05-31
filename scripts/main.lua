@@ -20,6 +20,7 @@ local Lobby = require("ui.Lobby")
 local Economy = require("economy.Economy")
 local AIDeployer = require("logic.AIDeployer")
 local Ranked = require("economy.Ranked")
+local CloudScore = require("economy.CloudScore")
 local SponsorPool = require("economy.SponsorPool")
 local Anim = require("ui.UIAnimations")
 -- LLM 网络模块（当前仅预留，需 persistent_world 服务端支持）
@@ -325,6 +326,9 @@ local function HandleDeployClick(screenX, screenY)
         local nearIdx = FindNearestDeployed(groundPos)
         if nearIdx then
             local unit = deployedUnits_[nearIdx]
+            -- 退还该角色的部署费用
+            local refund = unit.cost or Economy.CalcActualDeployCost(1, isRankedBattle_)
+            Economy.Earn(refund, "撤回角色:" .. (unit.moduleId or "?"))
             -- 从渲染和逻辑中移除
             CharRender.RemoveOne(unit.char)
             for i, c in ipairs(characters_) do
@@ -335,8 +339,9 @@ local function HandleDeployClick(screenX, screenY)
             end
             table.remove(deployedUnits_, nearIdx)
             UpdateDeployCounts()
-            DeploymentEditor.SetHint("已移除角色（选择卡牌可放置新角色）")
-            print("[Deploy] Removed unit at " .. string.format("%.1f, %.1f", unit.worldX, unit.worldZ))
+            DeploymentEditor.RefreshGold()
+            DeploymentEditor.SetHint("已移除 (+" .. refund .. "G 退还)")
+            print("[Deploy] Removed unit at " .. string.format("%.1f, %.1f, refund %dG", unit.worldX, unit.worldZ, refund))
         else
             DeploymentEditor.SetHint("选择角色卡，然后点击左半场放置")
         end
@@ -349,6 +354,19 @@ local function HandleDeployClick(screenX, screenY)
         return
     end
 
+    -- 放置前检查金币是否足够（每个角色即时扣费）
+    local unitCost = Economy.CalcActualDeployCost(1, isRankedBattle_)
+    if not Economy.CanAfford(unitCost) then
+        DeploymentEditor.SetHint("金币不足! 需要 " .. unitCost .. "G (拥有 " .. Economy.GetBalance() .. "G)")
+        return
+    end
+
+    -- 即时扣费
+    Economy.Spend(unitCost, "部署角色:" .. selected.moduleId)
+
+    -- 播放金币减少动画
+    DeploymentEditor.PlayGoldSpendAnim(unitCost)
+
     -- 放置角色
     local char = CharLogic.Create(selected.moduleId, selected.team, Vector3(groundPos.x, 0, groundPos.z))
     table.insert(characters_, char)
@@ -360,11 +378,12 @@ local function HandleDeployClick(screenX, screenY)
         worldX = groundPos.x,
         worldZ = groundPos.z,
         char = char,
+        cost = unitCost,  -- 记录该单位花费（清除时退还）
     })
 
     UpdateDeployCounts()
-    DeploymentEditor.SetHint("已放置 - 继续点击场地或选择其他角色")
-    print(string.format("[Deploy] Placed %s(%s) at %.1f, %.1f", selected.moduleId, selected.team, groundPos.x, groundPos.z))
+    DeploymentEditor.SetHint("已放置 (-" .. unitCost .. "G) 继续点击或选择其他角色")
+    print(string.format("[Deploy] Placed %s(%s) at %.1f, %.1f, cost %dG", selected.moduleId, selected.team, groundPos.x, groundPos.z, unitCost))
 end
 
 --- 更新部署计数（红方从 deployedUnits_ 统计，蓝方从 characters_ 统计）
@@ -382,8 +401,11 @@ end
 
 --- 清空玩家部署的角色（保留 AI 蓝方预部署角色）
 function ClearDeployedUnits()
+    -- 计算总退款
+    local totalRefund = 0
     -- 移除玩家手动放置的角色
     for _, unit in ipairs(deployedUnits_) do
+        totalRefund = totalRefund + (unit.cost or 0)
         CharRender.RemoveOne(unit.char)
         for i, c in ipairs(characters_) do
             if c == unit.char then
@@ -392,10 +414,15 @@ function ClearDeployedUnits()
             end
         end
     end
+    -- 退还全部费用
+    if totalRefund > 0 then
+        Economy.Earn(totalRefund, "清空部署退款")
+    end
     deployedUnits_ = {}
     UpdateDeployCounts()
-    DeploymentEditor.SetHint("已清空你的角色，重新选择放置")
-    print("[Deploy] Cleared player units (AI units preserved)")
+    DeploymentEditor.RefreshGold()
+    DeploymentEditor.SetHint("已清空 (+" .. totalRefund .. "G 退还)")
+    print(string.format("[Deploy] Cleared player units, refund %dG (AI units preserved)", totalRefund))
 end
 
 -- ============================================================================
@@ -462,18 +489,12 @@ function StartBattleFromDeployment()
         return
     end
 
-    -- 计算部署费用（新手保护减半）
-    local unitCount = #deployedUnits_
-    local deployCost = Economy.CalcActualDeployCost(unitCount, isRankedBattle_)
-    if not Economy.CanAfford(deployCost) then
-        DeploymentEditor.SetHint("金币不足! 需要 " .. deployCost .. "G (拥有 " .. Economy.GetBalance() .. "G)")
-        return
+    -- 费用已在放置时逐个扣除，这里只汇总用于结算显示
+    local totalSpent = 0
+    for _, unit in ipairs(deployedUnits_) do
+        totalSpent = totalSpent + (unit.cost or 0)
     end
-
-    -- 扣除部署费用
-    lastDeployCost_ = deployCost
-    local costLabel = isRankedBattle_ and "排位部署x" or "部署角色x"
-    Economy.Spend(deployCost, costLabel .. unitCount)
+    lastDeployCost_ = totalSpent
 
     -- AI 蓝方角色已在 EnterDeployment 阶段预部署（characters_ 中已有）
     -- 这里不再重复部署
@@ -673,6 +694,10 @@ function SettleBattleResult()
     if isRankedBattle_ then
         -- 排位结算：积分 + 奖励倍数 + 赞助池分成
         local scoreChange = Ranked.RecordMatch(playerWon)
+        -- 胜利时同步到云端排行榜
+        if playerWon then
+            CloudScore.RecordWin()
+        end
         local reward = Ranked.CalcReward(playerWon, enemyCount)
         local totalReward = reward + fighterBonus
         if totalReward > 0 then

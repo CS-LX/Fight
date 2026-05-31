@@ -9,6 +9,7 @@
 local UI = require("urhox-libs/UI")
 local CharRegistry = require("characters.CharRegistry")
 local Anim = require("ui.UIAnimations")
+local Economy = require("economy.Economy")
 
 local M = {}
 
@@ -67,6 +68,10 @@ local blueCountLabel_ = nil
 local hintLabel_ = nil
 ---@type Widget|nil
 local startBtn_ = nil
+---@type Widget|nil
+local goldLabel_ = nil
+---@type Widget|nil
+local goldChangeLabel_ = nil
 
 --- 卡牌引用（用于切换选中态）
 ---@type Widget[]
@@ -115,6 +120,48 @@ end
 
 function M.IsOpen()
     return isOpen_
+end
+
+--- 刷新金币显示
+function M.RefreshGold()
+    if goldLabel_ then
+        goldLabel_:SetText(tostring(Economy.GetBalance()) .. "G")
+    end
+end
+
+--- 播放金币扣除动画
+---@param cost number 扣除的金额
+function M.PlayGoldSpendAnim(cost)
+    if not goldLabel_ or not goldChangeLabel_ then return end
+
+    -- 显示 "-30G" 浮动文字并动画淡出上飘
+    goldChangeLabel_:SetText("-" .. cost .. "G")
+    goldChangeLabel_:SetStyle({ opacity = 1, translateY = 0 })
+
+    -- 数字滚动动画：从旧值到新值
+    local oldBalance = Economy.GetBalance() + cost  -- 扣费前的值
+    local newBalance = Economy.GetBalance()         -- 当前值（已扣费）
+    Anim.CountUp(goldLabel_, oldBalance, newBalance, {
+        duration = 0.5,
+        suffix = "G",
+        ease = "cubicout",
+    })
+
+    -- 浮动文字上飘淡出
+    local proxy = { y = 0, opacity = 1 }
+    local flux = require("libs.flux")
+    flux.to(proxy, 0.8, { y = -18, opacity = 0 })
+        :ease("cubicout")
+        :onupdate(function()
+            if goldChangeLabel_ then
+                goldChangeLabel_:SetStyle({ translateY = proxy.y, opacity = proxy.opacity })
+            end
+        end)
+
+    -- 金币区域抖动反馈
+    if goldLabel_ then
+        Anim.Shake(goldLabel_, { intensity = 3, duration = 0.25 })
+    end
 end
 
 -- ============================================================================
@@ -319,6 +366,46 @@ function M.Open(opts)
     end
 
     -- === 顶部标题栏（红蓝渐变） ===
+    -- 金币显示标签
+    goldLabel_ = UI.Label {
+        text = tostring(Economy.GetBalance()) .. "G",
+        fontSize = 14,
+        fontWeight = "bold",
+        fontColor = COLORS.gold,
+    }
+
+    -- 金币变动浮动文字（初始隐藏）
+    goldChangeLabel_ = UI.Label {
+        text = "",
+        fontSize = 12,
+        fontWeight = "bold",
+        fontColor = { 255, 71, 87, 255 },
+        opacity = 0,
+        position = "absolute",
+        top = -2,
+        right = -4,
+    }
+
+    -- 金币区域（右上角）
+    local goldDisplay = UI.Panel {
+        position = "absolute",
+        right = 12,
+        top = 0,
+        bottom = 0,
+        flexDirection = "row",
+        alignItems = "center",
+        gap = 4,
+        children = {
+            UI.Label {
+                text = "💰",
+                fontSize = 14,
+            },
+            UI.Panel {
+                children = { goldLabel_, goldChangeLabel_ },
+            },
+        },
+    }
+
     local header = UI.Panel {
         position = "absolute",
         top = 0, left = 0, right = 0,
@@ -342,6 +429,7 @@ function M.Open(opts)
                 fontColor = COLORS.gold,
                 textAlign = "center",
             },
+            goldDisplay,
         }
     }
 
@@ -569,6 +657,8 @@ function M.Close()
     blueCountLabel_ = nil
     hintLabel_ = nil
     startBtn_ = nil
+    goldLabel_ = nil
+    goldChangeLabel_ = nil
     selectedCard_ = nil
     redCardRefs_ = {}
     blueCardRefs_ = {}
