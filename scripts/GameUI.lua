@@ -62,6 +62,12 @@ local topBar_ = nil
 ---@type Widget|nil
 local gradientBg_ = nil
 
+-- Profile 数据（由 CreateBattleHUD 传入）
+---@type {name: string, avatar: string}|nil
+local redProfile_ = nil
+---@type {name: string, avatar: string}|nil
+local blueProfile_ = nil
+
 -- 动效追踪
 local prevRedCount_ = -1
 local prevBlueCount_ = -1
@@ -131,7 +137,12 @@ end
 --- 创建战斗阶段 HUD（含角色 Spine 层 + 像素风顶部 HUD + 底部按钮）
 ---@param characters table[] 逻辑数据列表
 ---@param onReset function 重置回调
-function M.CreateBattleHUD(characters, onReset)
+---@param opts? {redProfile?: {name: string, avatar: string}, blueProfile?: {name: string, avatar: string}}
+function M.CreateBattleHUD(characters, onReset, opts)
+    opts = opts or {}
+    redProfile_ = opts.redProfile
+    blueProfile_ = opts.blueProfile
+
     -- 角色 Spine 容器
     local spineLayer = CharRender.CreateSpines(characters)
 
@@ -143,14 +154,27 @@ function M.CreateBattleHUD(characters, onReset)
         else blueCount = blueCount + 1 end
     end
 
-    -- === 顶部 HUD 栏（像素风） ===
-    -- 红方计数
-    local redDot = UI.Panel {
-        width = 10, height = 10,
-        bgColor = COLORS.redText,
-        borderWidth = 1,
-        borderColor = { 180, 40, 50, 255 },
-    }
+    -- === 顶部 HUD 栏（像素风 + Profile） ===
+
+    -- 红方头像+昵称+计数
+    local redAvatar = nil
+    if redProfile_ and redProfile_.avatar then
+        redAvatar = UI.Panel {
+            width = 28, height = 28,
+            backgroundImage = redProfile_.avatar,
+            borderWidth = 2,
+            borderColor = COLORS.redText,
+        }
+    end
+    local redNameLabel = nil
+    if redProfile_ and redProfile_.name then
+        redNameLabel = UI.Label {
+            text = redProfile_.name,
+            fontSize = 11,
+            fontColor = { 255, 200, 200, 255 },
+            marginLeft = 4,
+        }
+    end
     redCountLabel_ = UI.Label {
         text = tostring(redCount),
         fontSize = 18,
@@ -167,13 +191,7 @@ function M.CreateBattleHUD(characters, onReset)
         fontColor = COLORS.gold,
     }
 
-    -- 蓝方计数
-    local blueDot = UI.Panel {
-        width = 10, height = 10,
-        bgColor = COLORS.blueText,
-        borderWidth = 1,
-        borderColor = { 40, 120, 180, 255 },
-    }
+    -- 蓝方计数+昵称+头像
     blueCountLabel_ = UI.Label {
         text = tostring(blueCount),
         fontSize = 18,
@@ -181,6 +199,24 @@ function M.CreateBattleHUD(characters, onReset)
         fontColor = COLORS.blueText,
         marginRight = 4,
     }
+    local blueNameLabel = nil
+    if blueProfile_ and blueProfile_.name then
+        blueNameLabel = UI.Label {
+            text = blueProfile_.name,
+            fontSize = 11,
+            fontColor = { 200, 220, 255, 255 },
+            marginRight = 4,
+        }
+    end
+    local blueAvatar = nil
+    if blueProfile_ and blueProfile_.avatar then
+        blueAvatar = UI.Panel {
+            width = 28, height = 28,
+            backgroundImage = blueProfile_.avatar,
+            borderWidth = 2,
+            borderColor = COLORS.blueText,
+        }
+    end
 
     -- 红蓝渐变背景（线性渐变：左红→右蓝）
     gradientBg_ = UI.Panel {
@@ -194,31 +230,36 @@ function M.CreateBattleHUD(characters, onReset)
         },
     }
 
+    -- 构建顶部栏内容子项（红方左侧 | VS | 蓝方右侧）
+    local topChildren = {}
+    if redAvatar then table.insert(topChildren, redAvatar) end
+    if redNameLabel then table.insert(topChildren, redNameLabel) end
+    table.insert(topChildren, redCountLabel_)
+    table.insert(topChildren, UI.Panel { width = 12 })
+    table.insert(topChildren, statusLabel_)
+    table.insert(topChildren, UI.Panel { width = 12 })
+    table.insert(topChildren, blueCountLabel_)
+    if blueNameLabel then table.insert(topChildren, blueNameLabel) end
+    if blueAvatar then table.insert(topChildren, blueAvatar) end
+
     local topBar = UI.Panel {
         position = "absolute",
         top = 0, left = 0, right = 0,
-        height = 40,
+        height = 44,
         borderWidth = 2,
         borderColor = COLORS.border,
         children = {
             gradientBg_,
-            -- 前景层：文字内容
+            -- 前景层：头像+昵称+计数
             UI.Panel {
                 position = "absolute",
                 top = 0, left = 0, right = 0, bottom = 0,
                 flexDirection = "row",
                 justifyContent = "center",
                 alignItems = "center",
-                gap = 8,
-                children = {
-                    redDot,
-                    redCountLabel_,
-                    UI.Panel { width = 16 },
-                    statusLabel_,
-                    UI.Panel { width = 16 },
-                    blueCountLabel_,
-                    blueDot,
-                }
+                paddingHorizontal = 8,
+                gap = 4,
+                children = topChildren,
             },
         }
     }

@@ -22,6 +22,7 @@ local AIDeployer = require("logic.AIDeployer")
 local Ranked = require("economy.Ranked")
 local CloudScore = require("economy.CloudScore")
 local SponsorPool = require("economy.SponsorPool")
+local AIProfile = require("logic.AIProfile")
 local Anim = require("ui.UIAnimations")
 -- LLM 网络模块（当前仅预留，需 persistent_world 服务端支持）
 -- local LLMClient = require("network.Client")
@@ -73,6 +74,10 @@ local lastDeployCost_ = 0
 --- 沙盒测试模式（不触发经济结算）
 local sandboxMode_ = false
 
+--- 当前对战 AI Profile（头像+昵称）
+---@type {name: string, avatar: string, tier: string, tierName: string}|nil
+local currentAIProfile_ = nil
+
 -- ============================================================================
 -- 生命周期
 -- ============================================================================
@@ -105,6 +110,9 @@ function Start()
     bgmSource:SetSoundType("Music")
     bgmSource:Play(bgm)
     bgmSource.gain = 0.35
+
+    -- 异步获取 TapTap 昵称（用于玩家 Profile 显示）
+    AIProfile.FetchPlayerNickname()
 
     -- 游戏从大厅开始
     EnterLobby()
@@ -212,7 +220,7 @@ function EnterDeployment(ranked)
         local aiSize = math.max(3, math.min(8, math.floor(playerMaxUnits * (0.7 + math.random() * 0.2))))
         aiConfig = { teamSize = aiSize, statMultiplier = 1.0 }
     end
-    local aiChars = AIDeployer.DeployPvAI(aiConfig.teamSize, nil, aiConfig.statMultiplier)
+    local aiChars, aiTotalPV = AIDeployer.DeployPvAI(aiConfig.teamSize, nil, aiConfig.statMultiplier)
     for _, char in ipairs(aiChars) do
         table.insert(characters_, char)
     end
@@ -220,7 +228,11 @@ function EnterDeployment(ranked)
     for _, char in ipairs(characters_) do
         CharRender.AddOne(char)
     end
-    print(string.format("[Deploy] AI blue pre-deployed %d units", aiConfig.teamSize))
+
+    -- 根据 AI 子力生成对应 Profile
+    currentAIProfile_ = AIProfile.GenerateProfile(aiTotalPV or 200)
+    print(string.format("[Deploy] AI blue pre-deployed %d units (PV=%.0f, tier=%s, name=%s)",
+        aiConfig.teamSize, aiTotalPV or 0, currentAIProfile_.tier, currentAIProfile_.name))
 
     -- 打开部署 UI（spineLayer 作为底层传入）
     DeploymentEditor.Open({
@@ -527,9 +539,13 @@ function StartBattleFromDeployment()
     SponsorPool.SimulateAIBets(redStr, blueStr)
 
     -- 重建完整 HUD（CharRender 已有角色 spine，需要重新包装到游戏 HUD）
+    local playerProfile = AIProfile.GetPlayerProfile()
     GameUI.CreateBattleHUD(characters_, function()
         SettleBattleResult()
-    end)
+    end, {
+        redProfile = playerProfile,
+        blueProfile = currentAIProfile_,
+    })
     GameUI.ResetStatus()
     print("[Main] Battle started! " .. #deployedUnits_ .. " units deployed" ..
         (isRankedBattle_ and " [RANKED]" or ""))
