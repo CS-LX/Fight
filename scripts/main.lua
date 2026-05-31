@@ -212,7 +212,7 @@ function EnterDeployment(ranked)
         local aiSize = math.max(3, math.min(8, math.floor(playerMaxUnits * (0.7 + math.random() * 0.2))))
         aiConfig = { teamSize = aiSize, statMultiplier = 1.0 }
     end
-    local aiChars = AIDeployer.DeployTeam("blue", aiConfig.teamSize, nil, aiConfig.statMultiplier)
+    local aiChars = AIDeployer.DeployPvAI(aiConfig.teamSize, nil, aiConfig.statMultiplier)
     for _, char in ipairs(aiChars) do
         table.insert(characters_, char)
     end
