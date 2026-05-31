@@ -5,7 +5,7 @@
     "id": "771520039"
   },
   "entry": "main.lua",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "taptap_publish": {
     "title": "3D Arena Battle",
     "description": "3D竞技场对战游戏，Spine角色策略布阵对战",

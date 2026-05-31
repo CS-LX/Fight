@@ -137,9 +137,14 @@ function M.BuildUI()
         justifyContent = "space-between",
         paddingRight = 16,
         paddingLeft = 16,
-        backgroundColor = COLORS.surface,
-        borderBottomWidth = 2,
-        borderColor = COLORS.border,
+        backgroundGradient = {
+            type = "linear",
+            direction = "to-right",
+            from = { 20, 18, 48, 240 },
+            to = { 30, 25, 55, 240 },
+        },
+        borderBottomWidth = 1,
+        borderColor = { 58, 58, 106, 120 },
         children = {
             -- 左侧：段位
             UI.Panel {
@@ -204,14 +209,26 @@ function M.BuildUI()
         },
     }
 
-    -- 标题
+    -- 标题（带光晕装饰）
     local title = UI.Panel {
         alignItems = "center",
         marginTop = 24,
         marginBottom = 20,
         children = {
+            -- 标题发光底层
+            UI.Panel {
+                position = "absolute",
+                top = -10, left = -40, right = -40,
+                height = 50,
+                borderRadius = 25,
+                backgroundGradient = {
+                    type = "radial",
+                    from = { 33, 189, 174, 30 },
+                    to = { 33, 189, 174, 0 },
+                },
+            },
             UI.Label {
-                text = "ARENA LOBBY",
+                text = "⚔ ARENA LOBBY ⚔",
                 fontSize = 22,
                 fontWeight = "bold",
                 fontColor = COLORS.primary,
@@ -409,12 +426,98 @@ function M.BuildUI()
         children = { makerBtn },
     }
 
+    -- === 背景装饰层 ===
+    -- 顶部渐变光晕（从蓝紫向下淡出）
+    local bgGlowTop = UI.Panel {
+        position = "absolute",
+        top = 0, left = 0, right = 0,
+        height = "45%",
+        backgroundGradient = {
+            type = "linear",
+            direction = "to-bottom",
+            from = { 25, 20, 60, 180 },
+            to = { 15, 15, 35, 0 },
+        },
+    }
+
+    -- 底部渐变（从深红/暖色向上淡出）
+    local bgGlowBottom = UI.Panel {
+        position = "absolute",
+        bottom = 0, left = 0, right = 0,
+        height = "35%",
+        backgroundGradient = {
+            type = "linear",
+            direction = "to-top",
+            from = { 40, 15, 25, 120 },
+            to = { 15, 15, 35, 0 },
+        },
+    }
+
+    -- 中心径向光晕（聚焦中心亮区）
+    local bgRadialCenter = UI.Panel {
+        position = "absolute",
+        top = "15%", left = "20%", right = "20%",
+        height = "50%",
+        backgroundGradient = {
+            type = "radial",
+            from = { 45, 40, 90, 60 },
+            to = { 15, 15, 35, 0 },
+        },
+    }
+
+    -- 左上装饰光斑
+    local decorSpotTL = UI.Panel {
+        position = "absolute",
+        top = 30, left = 20,
+        width = 120, height = 120,
+        borderRadius = 60,
+        backgroundGradient = {
+            type = "radial",
+            from = { 108, 92, 231, 35 },
+            to = { 108, 92, 231, 0 },
+        },
+    }
+
+    -- 右下装饰光斑
+    local decorSpotBR = UI.Panel {
+        position = "absolute",
+        bottom = 60, right = 30,
+        width = 160, height = 160,
+        borderRadius = 80,
+        backgroundGradient = {
+            type = "radial",
+            from = { 33, 189, 174, 30 },
+            to = { 33, 189, 174, 0 },
+        },
+    }
+
+    -- 右上小光斑
+    local decorSpotTR = UI.Panel {
+        position = "absolute",
+        top = 80, right = 60,
+        width = 80, height = 80,
+        borderRadius = 40,
+        backgroundGradient = {
+            type = "radial",
+            from = { 255, 217, 61, 20 },
+            to = { 255, 217, 61, 0 },
+        },
+    }
+
     -- 组装根布局
     root_ = UI.Panel {
         width = "100%",
         height = "100%",
         backgroundColor = COLORS.background,
         children = {
+            -- 装饰层（absolute，不影响布局）
+            bgGlowTop,
+            bgGlowBottom,
+            bgRadialCenter,
+            decorSpotTL,
+            decorSpotBR,
+            decorSpotTR,
+            -- 内容层
             topBar,
             UI.Panel {
                 flexGrow = 1,
@@ -458,6 +561,13 @@ end
 ---@param opts {title:string, desc:string, cost:string, reward:string, btnText:string, btnColor:table, onClick:function}
 ---@return Widget
 function M.CreateModeCard(opts)
+    -- 卡片微渐变：从按钮色调的极淡版本开始
+    local cardGradientFrom = {
+        math.min(255, opts.btnColor[1] + 5),
+        math.min(255, opts.btnColor[2] + 5),
+        math.min(255, opts.btnColor[3] + 5),
+        18
+    }
     return UI.Panel {
         width = 220,
         paddingTop = 20,
@@ -465,11 +575,19 @@ function M.CreateModeCard(opts)
         paddingLeft = 16,
         paddingRight = 16,
         backgroundColor = COLORS.surface,
-        borderWidth = 2,
-        borderColor = COLORS.border,
+        backgroundGradient = {
+            type = "linear",
+            direction = "to-bottom",
+            from = cardGradientFrom,
+            to = { 27, 27, 58, 255 },
+        },
+        borderWidth = 1,
+        borderColor = { opts.btnColor[1], opts.btnColor[2], opts.btnColor[3], 60 },
+        borderRadius = 8,
         alignItems = "center",
         boxShadow = {
-            { x = 4, y = 4, blur = 0, color = COLORS.shadow },
+            { x = 0, y = 4, blur = 12, color = { opts.btnColor[1], opts.btnColor[2], opts.btnColor[3], 25 } },
+            { x = 0, y = 1, blur = 0, color = { 255, 255, 255, 8 } },
         },
         children = {
             -- 标题

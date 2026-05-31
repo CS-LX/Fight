@@ -25,7 +25,12 @@
       "enabled": false,
       "max_players": 2,
       "persistent_world": {
-        "enabled": true
+        "enabled": false
+      },
+      "match_info": {
+        "desc_name": "free_match",
+        "player_number": 2,
+        "immediately_start": true
       }
     }
   }
