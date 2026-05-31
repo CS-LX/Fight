@@ -25,7 +25,6 @@ local SponsorPool = require("economy.SponsorPool")
 local AIProfile = require("logic.AIProfile")
 local Anim = require("ui.UIAnimations")
 local UI = require("urhox-libs/UI")
-local GMPanel = require("ui.GMPanel")
 -- LLM 网络模块（当前仅预留，需 persistent_world 服务端支持）
 -- local LLMClient = require("network.Client")
 
@@ -250,6 +249,8 @@ function EnterLobby()
             OpenCharacterMakerFromLobby()
         end,
     })
+
+
 end
 
 -- ============================================================================
@@ -1037,11 +1038,6 @@ function HandleUpdate(eventType, eventData)
     UpdateSplash(dt)
     Anim.Update(dt)
     UpdateGameLogic(dt)
-
-    -- GM 热键：1.5秒内连按5次 G 键
-    if GMPanel.CheckHotkey(dt) then
-        GMPanel.Toggle()
-    end
 end
 
 ---@param eventType string

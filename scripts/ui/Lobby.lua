@@ -92,6 +92,12 @@ function M.IsOpen()
     return isOpen_
 end
 
+--- 获取根节点（供 GM 面板等附加 UI 使用）
+---@return Widget|nil
+function M.GetRoot()
+    return root_
+end
+
 --- 刷新余额显示
 function M.RefreshBalance()
     if balanceLabel_ then
@@ -504,6 +510,21 @@ function M.BuildUI()
         },
     }
 
+    -- GM 调试按钮（直接作为 absolute 子元素）
+    local GMPanel = require("ui.GMPanel")
+    local gmBtn = UI.Button {
+        text = "GM",
+        variant = "secondary",
+        size = "sm",
+        position = "absolute",
+        top = 50,
+        right = 8,
+        visible = GMPanel.IsGMUser(),
+        onClick = function()
+            GMPanel.Toggle()
+        end,
+    }
+
     -- 组装根布局
     root_ = UI.Panel {
         width = "100%",
@@ -543,6 +564,8 @@ function M.BuildUI()
                     },
                 },
             },
+            -- GM 按钮（放最后确保在最顶层可点击）
+            gmBtn,
         },
     }
 

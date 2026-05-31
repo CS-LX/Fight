@@ -1,5 +1,5 @@
 -- ============================================================================
--- GMPanel.lua - GM 调试面板（同时按住 1+2+3 打开）
+-- GMPanel.lua - GM 调试面板（仅限指定 TapTap 用户）
 -- ============================================================================
 local UI = require("urhox-libs/UI")
 local Economy = require("economy.Economy")
@@ -7,36 +7,31 @@ local Economy = require("economy.Economy")
 local M = {}
 
 local isOpen_ = false
+---@type Widget|nil
 local root_ = nil
 
---- 连续快速按 5 次 G 键触发（500ms 内完成）
-local tapCount_ = 0
-local tapTimer_ = 0
-local TAP_THRESHOLD = 5      -- 需要连按次数
-local TAP_WINDOW = 1.5       -- 时间窗口（秒）
+--- GM 白名单（允许使用 GM 的 TapTap 用户 ID）
+local GM_WHITELIST = {
+    ["570079718"] = true,
+    ["771520039"] = true,
+}
 
----@param dt number 帧间隔
+--- 获取当前用户 ID
+---@return string|nil
+local function getCurrentUserId()
+    if clientCloud and clientCloud.userId and clientCloud.userId ~= 0 then
+        return tostring(clientCloud.userId)
+    end
+    return nil
+end
+
+--- 检查当前用户是否有 GM 权限
 ---@return boolean
-function M.CheckHotkey(dt)
-    -- 计时器递减
-    if tapTimer_ > 0 then
-        tapTimer_ = tapTimer_ - dt
-        if tapTimer_ <= 0 then
-            tapCount_ = 0  -- 超时重置
-        end
+function M.IsGMUser()
+    local uid = getCurrentUserId()
+    if uid then
+        return GM_WHITELIST[uid] == true
     end
-
-    -- 检测 G 键按下（GetKeyPress = 仅按下瞬间为 true）
-    if input:GetKeyPress(KEY_G) then
-        tapCount_ = tapCount_ + 1
-        tapTimer_ = TAP_WINDOW  -- 重置窗口
-        if tapCount_ >= TAP_THRESHOLD then
-            tapCount_ = 0
-            tapTimer_ = 0
-            return true
-        end
-    end
-
     return false
 end
 
@@ -51,6 +46,15 @@ end
 
 function M.Open()
     if isOpen_ then return end
+
+    -- 获取 Lobby 根节点
+    local Lobby = require("ui.Lobby")
+    local lobbyRoot = Lobby.GetRoot()
+    if not lobbyRoot then
+        print("[GM] Cannot open: Lobby root not available")
+        return
+    end
+
     isOpen_ = true
 
     local goldLabel
@@ -59,6 +63,8 @@ function M.Open()
     local function refreshLabels()
         if goldLabel then goldLabel:SetText("金币: " .. tostring(Economy.GetBalance())) end
         if crystalLabel then crystalLabel:SetText("水晶: " .. tostring(Economy.GetCrystal())) end
+        -- 同步刷新大厅余额
+        Lobby.RefreshBalance()
     end
 
     local function makeRow(label, getValue, setFn)
@@ -129,15 +135,23 @@ function M.Open()
         },
     }
 
-    UI.PushOverlay(root_)
-    print("[GM] Panel opened")
+    -- 使用 AddChild 添加到 Lobby 根节点
+    lobbyRoot:AddChild(root_)
+    print("[GM] Panel opened via AddChild")
 end
 
 function M.Close()
     if not isOpen_ then return end
     isOpen_ = false
-    UI.PopOverlay(root_)
-    root_ = nil
+
+    if root_ then
+        local Lobby = require("ui.Lobby")
+        local lobbyRoot = Lobby.GetRoot()
+        if lobbyRoot then
+            lobbyRoot:RemoveChild(root_)
+        end
+        root_ = nil
+    end
     print("[GM] Panel closed")
 end
 
