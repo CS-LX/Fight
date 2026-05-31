@@ -155,8 +155,8 @@ function M.BuildUI(redCount, blueCount, spineLayer)
                 children = {
                     UI.Label { text = "押注", fontSize = 10, fontColor = COLORS.textMuted },
                     UI.Button {
-                        text = "RED",
-                        width = 52, height = 28,
+                        text = "俺寻思红队能赢",
+                        width = 140, height = 28,
                         fontSize = 10, fontWeight = "bold",
                         backgroundColor = COLORS.redText,
                         boxShadow = PIXEL_SHADOW,
@@ -167,8 +167,8 @@ function M.BuildUI(redCount, blueCount, spineLayer)
                         end,
                     },
                     UI.Button {
-                        text = "BLUE",
-                        width = 52, height = 28,
+                        text = "显然是蓝队更厉害",
+                        width = 140, height = 28,
                         fontSize = 10, fontWeight = "bold",
                         backgroundColor = COLORS.blueText,
                         boxShadow = PIXEL_SHADOW,

@@ -1,0 +1,269 @@
+{
+  "startTime": "2026-05-31T06:08:23.595Z",
+  "endTime": "2026-05-31T06:08:50.948Z",
+  "duration": "27353ms",
+  "result": {
+    "success": true
+  },
+  "steps": [
+    {
+      "time": "2026-05-31T06:08:23.751Z",
+      "stage": "upload_to_cdn",
+      "data": {
+        "status": "start"
+      }
+    },
+    {
+      "time": "2026-05-31T06:08:41.625Z",
+      "stage": "upload_to_cdn",
+      "data": {
+        "status": "done"
+      }
+    },
+    {
+      "time": "2026-05-31T06:08:41.625Z",
+      "stage": "network_config",
+      "data": {
+        "env": "production"
+      }
+    },
+    {
+      "time": "2026-05-31T06:08:41.630Z",
+      "stage": "load_config",
+      "data": {
+        "projectId": "p_lksd",
+        "configPath": "/userspaces/6568d3af-2137-4a38-8d64-655049b8d8b7/workspace/.project/project.json",
+        "taptap_publish": {
+          "title": "玄幻竞技场",
+          "description": "3D竞技场对战游戏，角色策略布阵对战",
+          "category": "strategy",
+          "screen_orientation": "landscape",
+          "collection_type": "sce",
+          "trial_note": "全军出击！我咬死你！",
+          "app_platforms": "1,2",
+          "developer_id": 248818,
+          "app_id": 864823,
+          "miniapp_id": "tapmcqe3dcsouhsxbc",
+          "gameplay_demo_video_source": "https://tapcode-sce.spark.xd.com/videos/6568d3af-2137-4a38-8d64-655049b8d8b7/1780203441783-uploaded_c7b708de.mp4"
+        },
+        "assets": {
+          "icon": "./game_material/icon.png",
+          "screenshots": [
+            "./game_material/SCREENSHOT_2026-05-31T04-09-48_01.png",
+            "./game_material/SCREENSHOT_2026-05-31T04-09-48_02.png",
+            "./game_material/SCREENSHOT_2026-05-31T04-09-48_03.png"
+          ],
+          "promotional_image": "./game_material/PROMO_2026-05-31T04-09-48_01.jpg",
+          "icon_url": "https://tapcode-sce.spark.xd.com/assets/game_material/p_lksd/icon.png",
+          "screenshot_urls": [
+            "https://tapcode-sce.spark.xd.com/assets/game_material/玄幻竞技场/SCREENSHOT_2026-05-31T04-09-48_01.png",
+            "https://tapcode-sce.spark.xd.com/assets/game_material/玄幻竞技场/SCREENSHOT_2026-05-31T04-09-48_02.png",
+            "https://tapcode-sce.spark.xd.com/assets/game_material/玄幻竞技场/SCREENSHOT_2026-05-31T04-09-48_03.png"
+          ],
+          "promotional_image_url": "https://tapcode-sce.spark.xd.com/assets/game_material/玄幻竞技场/PROMO_2026-05-31T04-09-48_01.jpg",
+          "cover_horizontal": "./game_material/COVER_HORIZONTAL_2026-05-31T04-12-56_01.png",
+          "cover_horizontal_url": "https://tapcode-sce.spark.xd.com/assets/game_material/玄幻竞技场/COVER_HORIZONTAL_2026-05-31T04-12-56_01.png",
+          "cover_vertical": "./game_material/COVER_VERTICAL_2026-05-31T04-12-56_01.png",
+          "cover_vertical_url": "https://tapcode-sce.spark.xd.com/assets/game_material/玄幻竞技场/COVER_VERTICAL_2026-05-31T04-12-56_01.png"
+        }
+      }
+    },
+    {
+      "time": "2026-05-31T06:08:41.948Z",
+      "stage": "update_game",
+      "data": {
+        "app_id": 864823,
+        "developer_id": 248818
+      }
+    },
+    {
+      "time": "2026-05-31T06:08:41.954Z",
+      "stage": "upload_assets",
+      "data": {
+        "status": "start",
+        "assets": {
+          "icon": "./game_material/icon.png",
+          "screenshots": [
+            "./game_material/SCREENSHOT_2026-05-31T04-09-48_01.png",
+            "./game_material/SCREENSHOT_2026-05-31T04-09-48_02.png",
+            "./game_material/SCREENSHOT_2026-05-31T04-09-48_03.png"
+          ],
+          "promotional_image": "./game_material/PROMO_2026-05-31T04-09-48_01.jpg",
+          "icon_url": "https://tapcode-sce.spark.xd.com/assets/game_material/p_lksd/icon.png",
+          "screenshot_urls": [
+            "https://tapcode-sce.spark.xd.com/assets/game_material/玄幻竞技场/SCREENSHOT_2026-05-31T04-09-48_01.png",
+            "https://tapcode-sce.spark.xd.com/assets/game_material/玄幻竞技场/SCREENSHOT_2026-05-31T04-09-48_02.png",
+            "https://tapcode-sce.spark.xd.com/assets/game_material/玄幻竞技场/SCREENSHOT_2026-05-31T04-09-48_03.png"
+          ],
+          "promotional_image_url": "https://tapcode-sce.spark.xd.com/assets/game_material/玄幻竞技场/PROMO_2026-05-31T04-09-48_01.jpg",
+          "cover_horizontal": "./game_material/COVER_HORIZONTAL_2026-05-31T04-12-56_01.png",
+          "cover_horizontal_url": "https://tapcode-sce.spark.xd.com/assets/game_material/玄幻竞技场/COVER_HORIZONTAL_2026-05-31T04-12-56_01.png",
+          "cover_vertical": "./game_material/COVER_VERTICAL_2026-05-31T04-12-56_01.png",
+          "cover_vertical_url": "https://tapcode-sce.spark.xd.com/assets/game_material/玄幻竞技场/COVER_VERTICAL_2026-05-31T04-12-56_01.png"
+        }
+      }
+    },
+    {
+      "time": "2026-05-31T06:08:45.080Z",
+      "stage": "upload_cover_horizontal",
+      "data": {
+        "path": "./game_material/COVER_HORIZONTAL_2026-05-31T04-12-56_01.png",
+        "resolvedPath": "/userspaces/6568d3af-2137-4a38-8d64-655049b8d8b7/workspace/game_material/COVER_HORIZONTAL_2026-05-31T04-12-56_01.png"
+      }
+    },
+    {
+      "time": "2026-05-31T06:08:45.097Z",
+      "stage": "upload_cover_horizontal",
+      "data": {
+        "fileSize": 2524220
+      }
+    },
+    {
+      "time": "2026-05-31T06:08:45.967Z",
+      "stage": "upload_cover_horizontal",
+      "data": {
+        "response": {
+          "result": true,
+          "image_url": "https://img-tc.tapimg.com/market/images/Fuh2czABJXwtx6yOlxB8a-J9tg2H.png"
+        }
+      }
+    },
+    {
+      "time": "2026-05-31T06:08:45.967Z",
+      "stage": "upload_cover_vertical",
+      "data": {
+        "path": "./game_material/COVER_VERTICAL_2026-05-31T04-12-56_01.png",
+        "resolvedPath": "/userspaces/6568d3af-2137-4a38-8d64-655049b8d8b7/workspace/game_material/COVER_VERTICAL_2026-05-31T04-12-56_01.png"
+      }
+    },
+    {
+      "time": "2026-05-31T06:08:45.983Z",
+      "stage": "upload_cover_vertical",
+      "data": {
+        "fileSize": 2426329
+      }
+    },
+    {
+      "time": "2026-05-31T06:08:47.313Z",
+      "stage": "upload_cover_vertical",
+      "data": {
+        "response": {
+          "result": true,
+          "image_url": "https://img-tc.tapimg.com/market/images/Fs2VVXwrP8g_25yzHFpnbk5SwMvp.png"
+        }
+      }
+    },
+    {
+      "time": "2026-05-31T06:08:47.313Z",
+      "stage": "upload_assets",
+      "data": {
+        "status": "done",
+        "uploadedAssets": {
+          "iconUrl": "https://img-tc.tapimg.com/market/images/FmoxCKhlXDnTquEqkkRMsiNThHt4.png",
+          "screenshotUrls": [
+            "https://img-tc.tapimg.com/market/images/Fp3V9BhXB9cmpjZS1jinZ1sgTosx.png",
+            "https://img-tc.tapimg.com/market/images/FlW-aEtkbxi47GieNJqbIYFgmwOb.png",
+            "https://img-tc.tapimg.com/market/images/FrcRX165gPbfPzd8IbLe3RK9FYjo.png"
+          ],
+          "bannerUrl": "https://img-tc.tapimg.com/market/images/FlA8EhcuOQigdD9zMla8b2bs229_.jpg",
+          "coverUrl": "https://img-tc.tapimg.com/market/images/Fuh2czABJXwtx6yOlxB8a-J9tg2H.png",
+          "coverVerticalUrl": "https://img-tc.tapimg.com/market/images/Fs2VVXwrP8g_25yzHFpnbk5SwMvp.png"
+        }
+      }
+    },
+    {
+      "time": "2026-05-31T06:08:47.314Z",
+      "stage": "resolve_gameplay_demo_video",
+      "data": {
+        "source": "https://tapcode-sce.spark.xd.com/videos/6568d3af-2137-4a38-8d64-655049b8d8b7/1780203441783-uploaded_c7b708de.mp4",
+        "sourceType": "remote",
+        "appId": 864823,
+        "developerId": 248818
+      }
+    },
+    {
+      "time": "2026-05-31T06:08:47.317Z",
+      "stage": "resolve_gameplay_demo_video_cache_lookup",
+      "data": {
+        "cacheEntry": {
+          "source": "https://tapcode-sce.spark.xd.com/videos/6568d3af-2137-4a38-8d64-655049b8d8b7/1780203441783-uploaded_c7b708de.mp4",
+          "source_type": "remote",
+          "video_id": 5688556,
+          "sha256": "556f8e2cf0ace4325dd3f0a3436325ffc040abb5d57f5fd5e31f9333ccd42a7a",
+          "etag": "\"E57086BFC120F7646848E58DEFC6AF50\"",
+          "last_modified": "Sun, 31 May 2026 04:57:28 GMT",
+          "content_length": 19747995
+        }
+      }
+    },
+    {
+      "time": "2026-05-31T06:08:48.345Z",
+      "stage": "submit_spark_request",
+      "data": {
+        "app_id": 864823,
+        "developer_id": 248818,
+        "map_version": "6",
+        "sce_project_id": "p_lksd",
+        "category": "strategy",
+        "collection_type": "strategy",
+        "description": "3D竞技场对战游戏，角色策略布阵对战",
+        "screen_orientation": 2,
+        "title": "玄幻竞技场",
+        "icon": "https://img-tc.tapimg.com/market/images/FmoxCKhlXDnTquEqkkRMsiNThHt4.png",
+        "screenshots": [
+          "https://img-tc.tapimg.com/market/images/Fp3V9BhXB9cmpjZS1jinZ1sgTosx.png",
+          "https://img-tc.tapimg.com/market/images/FlW-aEtkbxi47GieNJqbIYFgmwOb.png",
+          "https://img-tc.tapimg.com/market/images/FrcRX165gPbfPzd8IbLe3RK9FYjo.png"
+        ],
+        "banner": "https://img-tc.tapimg.com/market/images/FlA8EhcuOQigdD9zMla8b2bs229_.jpg",
+        "trial_note": "全军出击！我咬死你！",
+        "app_platforms": "1,2",
+        "cover": "https://img-tc.tapimg.com/market/images/Fuh2czABJXwtx6yOlxB8a-J9tg2H.png",
+        "cover_vertical": "https://img-tc.tapimg.com/market/images/Fs2VVXwrP8g_25yzHFpnbk5SwMvp.png",
+        "gameplay_demo_video_id": 5688556,
+        "publish_intl": false
+      }
+    },
+    {
+      "time": "2026-05-31T06:08:50.474Z",
+      "stage": "submit_spark_response",
+      "data": {
+        "app_id": 864823,
+        "app_title": "玄幻竞技场",
+        "category": "strategy",
+        "category_label": "策略",
+        "display_app_title": "策略游戏精选"
+      }
+    },
+    {
+      "time": "2026-05-31T06:08:50.474Z",
+      "stage": "update_project_app_id",
+      "data": {
+        "stage": "start",
+        "project_id": "p_lksd",
+        "app_id": 864823
+      }
+    },
+    {
+      "time": "2026-05-31T06:08:50.948Z",
+      "stage": "update_project_app_id",
+      "data": {
+        "stage": "success",
+        "project_id": "p_lksd",
+        "app_id": 864823
+      }
+    },
+    {
+      "time": "2026-05-31T06:08:50.948Z",
+      "stage": "publish_result",
+      "data": {
+        "action": "updated",
+        "status": "pending_review",
+        "game_id": 864823,
+        "message": "成功更新游戏 \"玄幻竞技场\"",
+        "developer_id": 248818,
+        "config_file_path": "/userspaces/6568d3af-2137-4a38-8d64-655049b8d8b7/workspace/.project/project.json"
+      }
+    }
+  ]
+}
