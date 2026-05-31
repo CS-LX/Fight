@@ -223,6 +223,58 @@ function M.GetPlayerProfile()
     }
 end
 
+--- 批量生成不重复的 AI 观众 Profile（用于赞助观战模式）
+---@param count number 需要生成的数量
+---@return table[] profiles { {name, avatar, tier, tierName}, ... }
+function M.GenerateSpectatorProfiles(count)
+    local profiles = {}
+    local usedNames = {}
+    local usedAvatars = {}
+
+    -- 混合所有昵称池
+    local allNames = {}
+    for _, t in ipairs(TIERS) do
+        for _, n in ipairs(t.namePool) do
+            table.insert(allNames, n)
+        end
+    end
+
+    -- 混合所有头像池
+    local allAvatars = {}
+    for _, category in pairs(AVATAR_POOLS) do
+        for _, a in ipairs(category) do
+            table.insert(allAvatars, a)
+        end
+    end
+
+    for i = 1, count do
+        -- 选不重复的昵称
+        local name
+        for attempt = 1, 50 do
+            name = allNames[math.random(1, #allNames)]
+            if not usedNames[name] then break end
+        end
+        usedNames[name] = true
+
+        -- 选不重复的头像
+        local avatar
+        for attempt = 1, 50 do
+            avatar = allAvatars[math.random(1, #allAvatars)]
+            if not usedAvatars[avatar] then break end
+        end
+        usedAvatars[avatar] = true
+
+        table.insert(profiles, {
+            name = name,
+            avatar = avatar,
+            tier = "spectator",
+            tierName = "观众",
+        })
+    end
+
+    return profiles
+end
+
 --- 获取所有层级信息（供 UI 展示）
 ---@return AITier[]
 function M.GetTiers()

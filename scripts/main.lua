@@ -24,6 +24,8 @@ local CloudScore = require("economy.CloudScore")
 local SponsorPool = require("economy.SponsorPool")
 local AIProfile = require("logic.AIProfile")
 local Anim = require("ui.UIAnimations")
+local UI = require("urhox-libs/UI")
+local GMPanel = require("ui.GMPanel")
 -- LLM 网络模块（当前仅预留，需 persistent_world 服务端支持）
 -- local LLMClient = require("network.Client")
 
@@ -103,25 +105,88 @@ function Start()
     SubscribeToEvent("TouchBegin", "HandleTouchBegin")
 
     -- 循环背景音乐
-    local bgm = cache:GetResource("Sound", "audio/Carefree.mp3")
-    bgm.looped = true
-    local bgmNode = scene_:CreateChild("BGM")
-    local bgmSource = bgmNode:CreateComponent("SoundSource")
-    bgmSource:SetSoundType("Music")
-    bgmSource:Play(bgm)
-    bgmSource.gain = 0.35
+    local bgm = cache:GetResource("Sound", "audio/Carefree.ogg")
+    if not bgm then
+        bgm = cache:GetResource("Sound", "audio/Carefree.mp3")
+    end
+    if bgm then
+        bgm.looped = true
+        local bgmNode = scene_:CreateChild("BGM")
+        local bgmSource = bgmNode:CreateComponent("SoundSource")
+        bgmSource:SetSoundType("Music")
+        bgmSource.gain = 0.35
+        bgmSource:Play(bgm)
+    end
 
     -- 异步获取 TapTap 昵称（用于玩家 Profile 显示）
     AIProfile.FetchPlayerNickname()
 
-    -- 游戏从大厅开始
-    EnterLobby()
+    -- 首次进入时显示 Splash（2秒后淡出进入大厅）
+    ShowSplash()
 
-    print("=== TABS Arena - Lobby ===")
+    print("=== TABS Arena - Splash ===")
 end
 
 function Stop()
     GameUI.Shutdown()
+end
+
+-- ============================================================================
+-- Splash 启动画面（每次session首次进入时显示一次）
+-- ============================================================================
+
+local splashShown_ = false
+
+function ShowSplash()
+    if splashShown_ then
+        EnterLobby()
+        return
+    end
+    splashShown_ = true
+    gameState_ = "splash"
+
+    local splashPanel = UI.Panel {
+        width = "100%",
+        height = "100%",
+        backgroundColor = { 0, 0, 0, 255 },
+        justifyContent = "center",
+        alignItems = "center",
+        transition = "opacity 0.6s easeOut",
+        opacity = 1.0,
+        children = {
+            UI.Panel {
+                width = 360,
+                height = 200,
+                backgroundImage = "image/Gemini_Generated_Image_6mnnav6mnnav6mnn.png",
+                backgroundFit = "contain",
+            },
+        },
+    }
+    UI.SetRoot(splashPanel)
+
+    -- 2秒后开始淡出
+    splashTimer_ = 2.0
+    splashFading_ = false
+    splashPanel_ = splashPanel
+end
+
+function UpdateSplash(dt)
+    if gameState_ ~= "splash" then return end
+    splashTimer_ = splashTimer_ - dt
+    if splashTimer_ <= 0 and not splashFading_ then
+        splashFading_ = true
+        splashPanel_:SetStyle({ opacity = 0 })
+        -- 淡出动画 0.6s 后进入大厅
+        splashFadeTimer_ = 0.6
+    end
+    if splashFading_ then
+        splashFadeTimer_ = splashFadeTimer_ - dt
+        if splashFadeTimer_ <= 0 then
+            gameState_ = "lobby"
+            UI.SetRoot(nil)
+            EnterLobby()
+        end
+    end
 end
 
 -- ============================================================================
@@ -969,8 +1034,14 @@ end
 ---@param eventData UpdateEventData
 function HandleUpdate(eventType, eventData)
     local dt = eventData["TimeStep"]:GetFloat()
+    UpdateSplash(dt)
     Anim.Update(dt)
     UpdateGameLogic(dt)
+
+    -- GM 热键：1.5秒内连按5次 G 键
+    if GMPanel.CheckHotkey(dt) then
+        GMPanel.Toggle()
+    end
 end
 
 ---@param eventType string
