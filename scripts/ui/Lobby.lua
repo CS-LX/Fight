@@ -52,7 +52,7 @@ local balanceLabel_ = nil
 local crystalLabel_ = nil
 
 --- 回调
----@type {onBattle: function, onRanked: function, onSpectate: function, onMaker: function}|nil
+---@type {onBattle: function, onRanked: function, onSpectate: function, onMaker: function, onSandbox: function}|nil
 local callbacks_ = nil
 
 -- ============================================================================
@@ -317,6 +317,23 @@ function M.BuildUI()
         end,
     })
 
+    -- 模式卡片4：沙盒模式
+    local sandboxCard = M.CreateModeCard({
+        title = "沙盒模式",
+        desc = "自由部署红蓝双方，不消耗金币",
+        cost = "部署费: 免费",
+        reward = "无经济结算",
+        btnText = "进入沙盒",
+        btnColor = { 180, 160, 60, 255 },
+        onClick = function()
+            if callbacks_ and callbacks_.onSandbox then
+                local cb = callbacks_.onSandbox
+                M.Close()
+                cb()
+            end
+        end,
+    })
+
     -- 救济金按钮（仅当余额低时显示）
     local reliefPanel = nil
     local canRelief, _ = Economy.CanClaimRelief()
@@ -419,7 +436,7 @@ function M.BuildUI()
     }
 
     -- 收集卡片行的 children
-    local cardRowChildren = { battleCard, rankedCard, spectateCard }
+    local cardRowChildren = { battleCard, rankedCard, spectateCard, sandboxCard }
 
     -- 收集底部区域 children
     local bottomChildren = { progressBar, statsRow }
@@ -574,7 +591,7 @@ function M.BuildUI()
     -- === 入场动画 ===
     Anim.SlideInFromTop(topBar, { duration = 0.4, distance = 44, ease = "cubicout" })
     Anim.FadeIn(title, { duration = 0.5, delay = 0.15 })
-    Anim.Stagger({ battleCard, rankedCard, spectateCard }, Anim.PopIn, {
+    Anim.Stagger({ battleCard, rankedCard, spectateCard, sandboxCard }, Anim.PopIn, {
         stagger = 0.08,
         baseDelay = 0.2,
     })

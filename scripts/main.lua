@@ -248,9 +248,59 @@ function EnterLobby()
         onMaker = function()
             OpenCharacterMakerFromLobby()
         end,
+        onSandbox = function()
+            EnterSandboxDeployment()
+        end,
     })
 
 
+end
+
+-- ============================================================================
+-- 沙盒模式部署
+-- ============================================================================
+
+--- 进入沙盒部署（双方可放置，无费用，无经济结算）
+function EnterSandboxDeployment()
+    -- 清除旧战斗数据
+    CharRender.Clear(characters_)
+    ProjectileRender.Clear()
+    AI.Clear()
+    characters_ = {}
+    deployedUnits_ = {}
+
+    isRankedBattle_ = false
+    sandboxMode_ = true
+    lastDeployCost_ = 0
+    gameState_ = "deployment"
+
+    -- 创建空 Spine 容器
+    local spineLayer = CharRender.CreateEmptyContainer()
+
+    -- 沙盒模式无 AI Profile
+    currentAIProfile_ = { name = "沙盒", avatar = "", tier = "sandbox", tierName = "沙盒" }
+
+    -- 打开部署 UI（pvp 模式，双方都可手动放置）
+    DeploymentEditor.Open({
+        spineLayer = spineLayer,
+        mode = "pvp",
+        onStartBattle = function()
+            StartBattleFromDeployment()
+        end,
+        onClear = function()
+            ClearDeployedUnits()
+        end,
+        onOpenMaker = function()
+            OpenCharacterMaker()
+        end,
+        onBack = function()
+            DeploymentEditor.Close()
+            sandboxMode_ = false
+            EnterLobby()
+        end,
+    })
+
+    print("[Main] Sandbox deployment entered (free placement, both sides)")
 end
 
 -- ============================================================================
@@ -390,23 +440,29 @@ local function HandleDeployClick(screenX, screenY)
     end
 
     local selected = DeploymentEditor.GetSelectedCard()
-
-    -- pvai 模式下，限制只能放在红方半场
     local posTeam = GetTeamForPosition(groundPos)
-    if posTeam ~= "red" then
-        -- 不允许操作蓝方（AI）区域
+
+    -- pvai 模式下，限制只能放在红方半场（沙盒模式无此限制）
+    if not sandboxMode_ and posTeam ~= "red" then
         DeploymentEditor.SetHint("蓝方由 AI 控制，请在左半场放置你的角色")
         return
     end
 
-    -- 如果没有选中卡且点击附近有角色 → 删除（只能删除自己的红方角色）
+    -- 如果没有选中卡且点击附近有角色 → 删除
     if not selected then
         local nearIdx = FindNearestDeployed(groundPos)
         if nearIdx then
             local unit = deployedUnits_[nearIdx]
-            -- 退还该角色的部署费用
-            local refund = unit.cost or Economy.CalcActualDeployCost(1, isRankedBattle_)
-            Economy.Earn(refund, "撤回角色:" .. (unit.moduleId or "?"))
+            -- 非沙盒模式退还部署费用
+            if not sandboxMode_ then
+                local refund = unit.cost or Economy.CalcActualDeployCost(1, isRankedBattle_)
+                Economy.Earn(refund, "撤回角色:" .. (unit.moduleId or "?"))
+                DeploymentEditor.SetHint("已移除 (+" .. refund .. "G 退还)")
+                print("[Deploy] Removed unit at " .. string.format("%.1f, %.1f, refund %dG", unit.worldX, unit.worldZ, refund))
+            else
+                DeploymentEditor.SetHint("已移除")
+                print("[Deploy] Sandbox removed unit at " .. string.format("%.1f, %.1f", unit.worldX, unit.worldZ))
+            end
             -- 从渲染和逻辑中移除
             CharRender.RemoveOne(unit.char)
             for i, c in ipairs(characters_) do
@@ -418,32 +474,38 @@ local function HandleDeployClick(screenX, screenY)
             table.remove(deployedUnits_, nearIdx)
             UpdateDeployCounts()
             DeploymentEditor.RefreshGold()
-            DeploymentEditor.SetHint("已移除 (+" .. refund .. "G 退还)")
-            print("[Deploy] Removed unit at " .. string.format("%.1f, %.1f, refund %dG", unit.worldX, unit.worldZ, refund))
         else
-            DeploymentEditor.SetHint("选择角色卡，然后点击左半场放置")
+            DeploymentEditor.SetHint(sandboxMode_ and "选择角色卡，点击场地放置" or "选择角色卡，然后点击左半场放置")
         end
         return
     end
 
-    -- 选中的卡强制为红方（pvai 模式下 selected.team 始终为 red）
-    if posTeam ~= selected.team then
-        DeploymentEditor.SetHint("红方请放在左半场")
-        return
+    -- 非沙盒模式：选中的卡强制为红方，位置必须匹配队伍半场
+    if not sandboxMode_ then
+        if posTeam ~= selected.team then
+            DeploymentEditor.SetHint("红方请放在左半场")
+            return
+        end
+    else
+        -- 沙盒模式：位置必须匹配选中卡的队伍半场
+        if posTeam ~= selected.team then
+            local hint = selected.team == "red" and "红方角色请放在左半场" or "蓝方角色请放在右半场"
+            DeploymentEditor.SetHint(hint)
+            return
+        end
     end
 
-    -- 放置前检查金币是否足够（每个角色即时扣费）
-    local unitCost = Economy.CalcActualDeployCost(1, isRankedBattle_)
-    if not Economy.CanAfford(unitCost) then
-        DeploymentEditor.SetHint("金币不足! 需要 " .. unitCost .. "G (拥有 " .. Economy.GetBalance() .. "G)")
-        return
+    -- 沙盒模式免费，普通模式需检查并扣费
+    local unitCost = 0
+    if not sandboxMode_ then
+        unitCost = Economy.CalcActualDeployCost(1, isRankedBattle_)
+        if not Economy.CanAfford(unitCost) then
+            DeploymentEditor.SetHint("金币不足! 需要 " .. unitCost .. "G (拥有 " .. Economy.GetBalance() .. "G)")
+            return
+        end
+        Economy.Spend(unitCost, "部署角色:" .. selected.moduleId)
+        DeploymentEditor.PlayGoldSpendAnim(unitCost)
     end
-
-    -- 即时扣费
-    Economy.Spend(unitCost, "部署角色:" .. selected.moduleId)
-
-    -- 播放金币减少动画
-    DeploymentEditor.PlayGoldSpendAnim(unitCost)
 
     -- 放置角色
     local char = CharLogic.Create(selected.moduleId, selected.team, Vector3(groundPos.x, 0, groundPos.z))
@@ -456,11 +518,15 @@ local function HandleDeployClick(screenX, screenY)
         worldX = groundPos.x,
         worldZ = groundPos.z,
         char = char,
-        cost = unitCost,  -- 记录该单位花费（清除时退还）
+        cost = unitCost,
     })
 
     UpdateDeployCounts()
-    DeploymentEditor.SetHint("已放置 (-" .. unitCost .. "G) 继续点击或选择其他角色")
+    if sandboxMode_ then
+        DeploymentEditor.SetHint("已放置 [免费] 继续点击放置")
+    else
+        DeploymentEditor.SetHint("已放置 (-" .. unitCost .. "G) 继续点击或选择其他角色")
+    end
     print(string.format("[Deploy] Placed %s(%s) at %.1f, %.1f, cost %dG", selected.moduleId, selected.team, groundPos.x, groundPos.z, unitCost))
 end
 
@@ -492,15 +558,19 @@ function ClearDeployedUnits()
             end
         end
     end
-    -- 退还全部费用
-    if totalRefund > 0 then
+    -- 退还全部费用（沙盒模式不涉及经济）
+    if not sandboxMode_ and totalRefund > 0 then
         Economy.Earn(totalRefund, "清空部署退款")
     end
     deployedUnits_ = {}
     UpdateDeployCounts()
     DeploymentEditor.RefreshGold()
-    DeploymentEditor.SetHint("已清空 (+" .. totalRefund .. "G 退还)")
-    print(string.format("[Deploy] Cleared player units, refund %dG (AI units preserved)", totalRefund))
+    if sandboxMode_ then
+        DeploymentEditor.SetHint("已清空（沙盒模式）")
+    else
+        DeploymentEditor.SetHint("已清空 (+" .. totalRefund .. "G 退还)")
+    end
+    print(string.format("[Deploy] Cleared player units, refund %dG (sandbox=%s)", totalRefund, tostring(sandboxMode_)))
 end
 
 -- ============================================================================
@@ -736,8 +806,7 @@ function SettleBattleResult()
             { label = "提示", amount = 0, unit = "无经济影响" },
         }
         GameUI.ShowSettlement(title, true, items, function()
-            -- 回到角色制作器
-            OpenCharacterMakerFromLobby()
+            EnterLobby()
         end)
         return
     end
