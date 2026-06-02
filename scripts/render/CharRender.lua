@@ -622,10 +622,16 @@ function M.Update(characters, camera, dt)
     -- 基准距离（竞技场中心到相机）
     local refDist = (cameraPos - Vector3(0, 0, 0)):Length()
 
+    -- 世界尺寸校正系数：让角色大小跟随 3D 场景比例而非固定像素
+    -- 以 PC 端 1920 base pixels 宽度为设计基准
+    -- 在移动端 screenW 更小时，角色像素尺寸按比例缩小，保持场景中占比一致
+    local DESIGN_SCREEN_W = 1920.0
+    local worldScaleFactor = screenW / DESIGN_SCREEN_W
+
     -- 调试：前几帧打印关键信息（frame 1 和 frame 5 分别打印不同信息）
     if frameCount_ <= 5 and not debugPrinted_ then
-        print(string.format("[CharRender] Frame#%d | uiScale=%.2f screenW=%.0f screenH=%.0f refDist=%.2f cameraPos=%s",
-            frameCount_, uiScale, screenW, screenH, refDist, tostring(cameraPos)))
+        print(string.format("[CharRender] Frame#%d | uiScale=%.2f screenW=%.0f screenH=%.0f refDist=%.2f worldScale=%.3f cameraPos=%s",
+            frameCount_, uiScale, screenW, screenH, refDist, worldScaleFactor, tostring(cameraPos)))
         local rdCount = 0
         for _ in pairs(renderData_) do rdCount = rdCount + 1 end
         print(string.format("[CharRender] renderData_ count=%d characters count=%d", rdCount, #characters))
@@ -704,8 +710,9 @@ function M.Update(characters, camera, dt)
         -- 翻转：facingRight=true → flipX=false; facingRight=false → flipX=true
         local shouldFlip = not char.facingRight
 
-        -- 直接 scale 系数 = renderScale × perspScale × 体型缩放
-        local baseScale = def.renderScale * perspScale
+        -- 基于场景比例的缩放：worldScaleFactor 保证角色在场景中的占比恒定
+        -- PC(1920)上 worldScaleFactor=1.0 维持原有效果，移动端按比例缩小
+        local baseScale = def.renderScale * perspScale * worldScaleFactor
         local scaleValX = baseScale * (def.scaleX or 1.0)
         local scaleValY = baseScale * (def.scaleY or 1.0)
         local scaleVal = baseScale  -- 用于通用定位计算
@@ -835,15 +842,17 @@ function M.Update(characters, camera, dt)
         -- 更新血条位置和填充
         if rd.hpBar then
             local hpRatio = math.max(0, info.char.hp / info.char.maxHP)
-            local barX = math.floor(info.sx - HP_BAR_WIDTH / 2)
-            local barY = math.floor(info.sy - HP_BAR_OFFSET_Y)
+            local scaledBarW = math.floor(HP_BAR_WIDTH * worldScaleFactor)
+            local barX = math.floor(info.sx - scaledBarW / 2)
+            local barY = math.floor(info.sy - HP_BAR_OFFSET_Y * worldScaleFactor)
             rd.hpBar:SetStyle({
                 left = barX,
                 top = barY,
+                width = scaledBarW,
                 zIndex = 100 + i,  -- 血条始终在角色上层
             })
             -- 更新填充宽度
-            local fillW = math.floor(HP_BAR_WIDTH * hpRatio)
+            local fillW = math.floor(scaledBarW * hpRatio)
             rd.hpFill:SetWidth(math.max(0, fillW))
             -- 队伍颜色
             local color = info.char.team == "red" and "#e84040" or "#4080e8"

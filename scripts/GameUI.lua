@@ -115,13 +115,10 @@ function M.Init()
         },
     })
 
-    -- 平台字体选择：桌面端用像素字体，移动端用 MiSans（像素字体 CJK 字形集过大，移动端 atlas 溢出）
+    -- 平台字体选择：仅桌面原生端用像素字体，其余（移动端/Web编辑器）用 MiSans
+    -- 原因：像素字体 CJK 字形集约 7MB/个，Web/移动端异步加载会导致文字不显示
     local fonts
-    if PlatformUtils.IsMobilePlatform() then
-        fonts = {
-            { family = "sans", weights = { normal = "Fonts/MiSans-Regular.ttf" } },
-        }
-    else
+    if PlatformUtils.IsDesktopPlatform() then
         fonts = {
             { family = "sans", weights = {
                 normal = "Fonts/FusionPixel-12px-Prop-zh_hans.ttf",
@@ -130,6 +127,10 @@ function M.Init()
             { family = "mono", weights = {
                 normal = "Fonts/FusionPixel-12px-Mono-zh_hans.ttf",
             }},
+        }
+    else
+        fonts = {
+            { family = "sans", weights = { normal = "Fonts/MiSans-Regular.ttf" } },
         }
     end
 
