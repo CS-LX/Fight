@@ -5,6 +5,7 @@
 -- 设计风格：PixelForge 像素复古风
 
 local UI = require("urhox-libs/UI")
+local PlatformUtils = require("urhox-libs.Platform.PlatformUtils")
 local Config = require("Config")
 local CharRender = require("render.CharRender")
 local Anim = require("ui.UIAnimations")
@@ -114,17 +115,27 @@ function M.Init()
         },
     })
 
-    UI.Init({
-        theme = PixelForgeTheme,
+    -- 平台字体选择：桌面端用像素字体，移动端用 MiSans（像素字体 CJK 字形集过大，移动端 atlas 溢出）
+    local fonts
+    if PlatformUtils.IsMobilePlatform() then
+        fonts = {
+            { family = "sans", weights = { normal = "Fonts/MiSans-Regular.ttf" } },
+        }
+    else
         fonts = {
             { family = "sans", weights = {
                 normal = "Fonts/FusionPixel-12px-Prop-zh_hans.ttf",
-                bold = "Fonts/FusionPixel-12px-Prop-zh_hans-Bold.ttf",
+                bold   = "Fonts/FusionPixel-12px-Prop-zh_hans-Bold.ttf",
             }},
             { family = "mono", weights = {
                 normal = "Fonts/FusionPixel-12px-Mono-zh_hans.ttf",
             }},
-        },
+        }
+    end
+
+    UI.Init({
+        theme = PixelForgeTheme,
+        fonts = fonts,
         scale = UI.Scale.DEFAULT,
     })
 end

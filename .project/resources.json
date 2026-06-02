@@ -1,12 +1,9 @@
 {
   "$schema": "../schemas/resources.schema.json",
 
-  "preload_groups": ["core"],
+  "preload_groups": [],
 
   "groups": {
-    "core": [
-      "Fonts/**"
-    ],
     "default": [
       "**"
     ]
