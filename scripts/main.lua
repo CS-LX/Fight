@@ -105,9 +105,6 @@ function Start()
 
     -- 循环背景音乐
     local bgm = cache:GetResource("Sound", "audio/Carefree.ogg")
-    if not bgm then
-        bgm = cache:GetResource("Sound", "audio/Carefree.mp3")
-    end
     if bgm then
         bgm.looped = true
         local bgmNode = scene_:CreateChild("BGM")
