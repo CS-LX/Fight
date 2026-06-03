@@ -27,13 +27,14 @@ function M.Collect(characters)
             for _, pdata in ipairs(char.projectiles) do
                 -- 创建 widget（UI 系统用 Panel + backgroundImage 显示图片）
                 local hasBulletImg = pdata.bulletEffect and pdata.bulletEffect ~= ""
+                local size = (pdata.bulletSize and pdata.bulletSize > 0) and pdata.bulletSize or PROJ_SIZE
                 local sprite = UI.Panel {
                     backgroundImage = hasBulletImg and pdata.bulletEffect or nil,
                     backgroundFit = "contain",
                     backgroundColor = (not hasBulletImg) and (pdata.bulletColor or "#ffff00") or nil,
-                    width = PROJ_SIZE,
-                    height = PROJ_SIZE,
-                    borderRadius = PROJ_SIZE / 2,
+                    width = size,
+                    height = size,
+                    borderRadius = size / 2,
                     position = "absolute",
                     left = -100,
                     top = -100,
@@ -50,6 +51,7 @@ function M.Collect(characters)
                     damage = pdata.damage or 10,
                     angularSpeed = pdata.angularSpeed or 0,
                     rotation = 0,
+                    size = size,
                     -- 当前位置（从发射点开始）
                     pos = Vector3(pdata.fromPos.x, pdata.fromPos.y, pdata.fromPos.z),
                     alive = true,
@@ -132,9 +134,10 @@ function M.Update(camera, dt)
                     local sx = screenPos.x * screenW
                     local sy = screenPos.y * screenH
 
+                    local pSize = proj.size or PROJ_SIZE
                     local style = {
-                        left = math.floor(sx - PROJ_SIZE / 2),
-                        top = math.floor(sy - PROJ_SIZE / 2),
+                        left = math.floor(sx - pSize / 2),
+                        top = math.floor(sy - pSize / 2),
                     }
                     if proj.angularSpeed ~= 0 then
                         style.rotate = proj.rotation

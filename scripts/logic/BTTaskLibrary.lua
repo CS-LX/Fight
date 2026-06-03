@@ -736,6 +736,7 @@ M.Register("RangedAttack", {
         { key = "bulletColor", type = "string", default = "#ffff00", label = "子弹颜色" },
         { key = "damageMultiplier", type = "number", default = 1.0, label = "伤害倍率" },
         { key = "angularSpeed", type = "number", default = 0, label = "子弹角速度(度/秒)" },
+        { key = "bulletSize", type = "number", default = 0, label = "子弹尺寸(px,0=默认)" },
     },
     factory = function(params)
         params = params or {}
@@ -746,6 +747,7 @@ M.Register("RangedAttack", {
         local bulletColor = params.bulletColor or "#ffff00"
         local damageMul = params.damageMultiplier or 1.0
         local angularSpeed = params.angularSpeed or 0
+        local bulletSize = params.bulletSize or 0
 
         return BT.Task:new({
             run = function(task, ctx)
@@ -778,6 +780,7 @@ M.Register("RangedAttack", {
                         bulletColor = bulletColor,
                         damage = (char.attackDamage or 10) * damageMul,
                         angularSpeed = angularSpeed,
+                        bulletSize = bulletSize,
                     }
 
                     local cooldownMul = ctx.profileParams and ctx.profileParams.cooldownMul or 1.0
