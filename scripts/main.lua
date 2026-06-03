@@ -1099,6 +1099,9 @@ function SettleSpectateResult()
         print("[Spectate] No bet, base reward only")
     end
 
+    -- 清空观战状态（防止后续沙盒/普通对战误走观战结算）
+    spectateState_ = nil
+
     -- 显示结算面板
     local title = playerWon and "SPONSOR WIN!" or (betAmount > 0 and "SPONSOR LOST" or "SPECTATED")
     GameUI.ShowSettlement(title, playerWon, items, function()

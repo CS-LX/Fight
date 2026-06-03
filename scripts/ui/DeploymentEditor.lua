@@ -296,6 +296,7 @@ local function CreateCardPanel(team)
 
     return UI.Panel {
         width = CARD_SIZE + 16,
+        height = "100%",
         paddingTop = 8,
         paddingBottom = 8,
         paddingHorizontal = 8,
