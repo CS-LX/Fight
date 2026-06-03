@@ -25,6 +25,7 @@ local SponsorPool = require("economy.SponsorPool")
 local AIProfile = require("logic.AIProfile")
 local Anim = require("ui.UIAnimations")
 local SpectateUI = require("ui.SpectateUI")
+local StormCircle = require("StormCircle")
 local UI = require("urhox-libs/UI")
 -- LLM 网络模块（当前仅预留，需 persistent_world 服务端支持）
 -- local LLMClient = require("network.Client")
@@ -60,11 +61,8 @@ local DEPLOY_REMOVE_DIST = 1.5
 local redInitialHP_ = 0
 local blueInitialHP_ = 0
 
---- 加时赛机制（防止防御塔僵局）
-local battleTimer_ = 0           -- 战斗已持续时间
-local OVERTIME_START = 30        -- 30秒后进入加时
-local overtimeTick_ = 0          -- 加时伤害tick计时
-local overtimeActive_ = false    -- 是否已进入加时
+--- 缩圈机制（防止防御塔僵局，30秒后毒圈从外围缩小）
+-- 逻辑由 StormCircle 模块管理
 
 --- 角色默认碰撞半径（米），用于行动时互相排斥（当角色未配置时的 fallback）
 local CHAR_COLLISION_RADIUS_DEFAULT = 0.4
@@ -105,6 +103,7 @@ function Start()
     CreateScene()
     SetupCamera()
     Arena.Create(scene_)
+    StormCircle.Init(scene_)
 
     SubscribeToEvent("Update", "HandleUpdate")
     SubscribeToEvent("MouseButtonDown", "HandleMouseDown")
@@ -232,6 +231,7 @@ function EnterLobby()
     CharRender.Clear(characters_)
     ProjectileRender.Clear()
     AI.Clear()
+    StormCircle.Reset()
     characters_ = {}
     deployedUnits_ = {}
 
@@ -620,9 +620,7 @@ function TestBattleFromMaker(moduleId)
     table.insert(characters_, blueChar)
 
     gameState_ = "playing"
-    battleTimer_ = 0
-    overtimeActive_ = false
-    overtimeTick_ = 0
+    StormCircle.Reset()
 
     -- 记录双方初始总HP
     redInitialHP_ = redChar.hp or 0
@@ -657,9 +655,7 @@ function StartBattleFromDeployment()
     -- 关闭部署 UI
     DeploymentEditor.Close()
     gameState_ = "playing"
-    battleTimer_ = 0
-    overtimeActive_ = false
-    overtimeTick_ = 0
+    StormCircle.Reset()
 
     -- 记录双方初始总HP
     redInitialHP_ = 0
@@ -782,37 +778,9 @@ function UpdateGameLogic(dt)
     local blueRatio = blueInitialHP_ > 0 and (blueTotalHP / blueInitialHP_) or 0
     GameUI.UpdateHPRatio(redRatio, blueRatio)
 
-    -- 加时赛机制：防止防御塔僵局
-    battleTimer_ = battleTimer_ + dt
-    if battleTimer_ > OVERTIME_START then
-        if not overtimeActive_ then
-            overtimeActive_ = true
-            overtimeTick_ = 0
-            print("[Overtime] 加时赛开始！所有角色将持续受到递增伤害")
-        end
-        -- 每秒tick一次伤害
-        overtimeTick_ = overtimeTick_ + dt
-        if overtimeTick_ >= 1.0 then
-            overtimeTick_ = overtimeTick_ - 1.0
-            -- 递增伤害：加时后每秒造成最大HP的 5%，每10秒翻倍
-            local elapsed = battleTimer_ - OVERTIME_START
-            local multiplier = math.floor(elapsed / 10) + 1  -- 1x, 2x, 3x...
-            local dmgPercent = 0.05 * multiplier
-            for _, char in ipairs(characters_) do
-                if char.state ~= "dead" and char.state ~= "dying" then
-                    local maxHP = char.maxHP or char.baseHP or 100
-                    local dmg = math.ceil(maxHP * dmgPercent)
-                    char.hp = char.hp - dmg
-                    if char.hp <= 0 then
-                        char.hp = 0
-                        char.state = "dying"
-                        char.deathTimer = 1.2
-                        char.animState = "die"
-                    end
-                end
-            end
-        end
-        -- 重新统计存活（加时伤害可能导致死亡）
+    -- 缩圈机制：30秒后毒圈从外围缩小，圈外角色受到持续伤害
+    if StormCircle.Update(dt, characters_) then
+        -- 缩圈伤害可能导致死亡，重新统计存活
         redAlive = 0
         blueAlive = 0
         for _, char in ipairs(characters_) do
@@ -1033,9 +1001,7 @@ end
 --- 启动观战战斗
 function StartSpectatedBattle()
     gameState_ = "playing"
-    battleTimer_ = 0
-    overtimeActive_ = false
-    overtimeTick_ = 0
+    StormCircle.Reset()
 
     -- 赞助池：开启新一场，加入玩家押注 + AI 观众投注
     SponsorPool.BeginMatch()
