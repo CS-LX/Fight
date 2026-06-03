@@ -24,6 +24,7 @@ local PRESET_FILES = {
     "char_defs/kisaki.json",
     "char_defs/originium_slug.json",
     "char_defs/doro.json",
+    "char_defs/qiaolezi.json",
 }
 
 -- ============================================================================

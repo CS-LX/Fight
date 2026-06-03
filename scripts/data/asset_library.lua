@@ -32,6 +32,7 @@ M.sprites = {
     { id = "bunny", name = "Bunny", category = "character", image = "image/Bunny.png", width = 48, height = 48 },
     { id = "kisaki", name = "小咲", category = "character", image = "image/Kisaki.png", width = 48, height = 48 },
     { id = "kisaki_nocoke", name = "小咲 (No Coke)", category = "character", image = "image/Kisaki_NoCoke.png", width = 48, height = 48 },
+    { id = "qiaolezi", name = "巧了兹", category = "character", image = "image/巧了滋包装_20260603072239.png", width = 512, height = 686 },
     -- 投射物
     { id = "coke", name = "Coke Can", category = "projectile", image = "image/Coke.png", width = 24, height = 24 },
     -- 头部

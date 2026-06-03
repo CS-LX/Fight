@@ -1,0 +1,106 @@
+{
+  "id": "qiaolezi",
+  "name": "巧了兹",
+  "config": {
+    "baseSpeed": 0,
+    "baseHP": 120,
+    "attackDamage": 22,
+    "attackRange": 5.5,
+    "attackCooldown": 2.2,
+    "stopDistance": 0,
+    "collisionRadius": 0.4
+  },
+  "art": {
+    "mode": "sprite_bone",
+    "avatar": "image/巧了滋包装_20260603072239.png",
+    "renderScale": 0.12,
+    "frames": {
+      "idle": {
+        "duration": 2.0,
+        "bones": [{ "id": "body", "sprite": "qiaolezi", "pivotX": 0, "pivotY": 0 }],
+        "keyframes": {
+          "0": { "body": { "x": 0, "y": 0, "rot": 0, "scaleX": 1.0, "scaleY": 1.0 } },
+          "0.5": { "body": { "x": 0, "y": -1, "rot": 0, "scaleX": 1.0, "scaleY": 1.02 } },
+          "1.0": { "body": { "x": 0, "y": 0, "rot": 0, "scaleX": 1.0, "scaleY": 1.0 } },
+          "1.5": { "body": { "x": 0, "y": -1, "rot": 0, "scaleX": 1.0, "scaleY": 1.02 } },
+          "2.0": { "body": { "x": 0, "y": 0, "rot": 0, "scaleX": 1.0, "scaleY": 1.0 } }
+        }
+      },
+      "move": {
+        "duration": 1.0,
+        "bones": [{ "id": "body", "sprite": "qiaolezi", "pivotX": 0, "pivotY": 0 }],
+        "keyframes": {
+          "0": { "body": { "x": 0, "y": 0, "rot": 0, "scaleX": 1.0, "scaleY": 1.0 } },
+          "0.5": { "body": { "x": 0, "y": -1, "rot": 0, "scaleX": 1.0, "scaleY": 1.01 } },
+          "1.0": { "body": { "x": 0, "y": 0, "rot": 0, "scaleX": 1.0, "scaleY": 1.0 } }
+        }
+      },
+      "attack": {
+        "duration": 1.0,
+        "bones": [{ "id": "body", "sprite": "qiaolezi", "pivotX": 0, "pivotY": 0 }],
+        "keyframes": {
+          "0": { "body": { "x": 0, "y": 0, "rot": 0, "scaleX": 1.0, "scaleY": 1.0 } },
+          "0.2": { "body": { "x": 0, "y": 2, "rot": 0, "scaleX": 1.1, "scaleY": 0.85 } },
+          "0.4": { "body": { "x": 0, "y": -4, "rot": 0, "scaleX": 0.9, "scaleY": 1.15 } },
+          "0.6": { "body": { "x": 0, "y": -2, "rot": 3, "scaleX": 0.95, "scaleY": 1.08 } },
+          "0.8": { "body": { "x": 0, "y": -1, "rot": -2, "scaleX": 1.02, "scaleY": 1.0 } },
+          "1.0": { "body": { "x": 0, "y": 0, "rot": 0, "scaleX": 1.0, "scaleY": 1.0 } }
+        }
+      },
+      "hit": {
+        "duration": 0.5,
+        "bones": [{ "id": "body", "sprite": "qiaolezi", "pivotX": 0, "pivotY": 0 }],
+        "keyframes": {
+          "0": { "body": { "x": 0, "y": 0, "rot": 0, "scaleX": 1.0, "scaleY": 1.0 } },
+          "0.1": { "body": { "x": -3, "y": 0, "rot": -5, "scaleX": 1.06, "scaleY": 0.94 } },
+          "0.25": { "body": { "x": 2, "y": 0, "rot": 3, "scaleX": 0.97, "scaleY": 1.03 } },
+          "0.4": { "body": { "x": -1, "y": 0, "rot": -1, "scaleX": 1.01, "scaleY": 0.99 } },
+          "0.5": { "body": { "x": 0, "y": 0, "rot": 0, "scaleX": 1.0, "scaleY": 1.0 } }
+        }
+      },
+      "die": {
+        "duration": 1.0,
+        "bones": [{ "id": "body", "sprite": "qiaolezi", "pivotX": 0, "pivotY": 0 }],
+        "keyframes": {
+          "0": { "body": { "x": 0, "y": 0, "rot": 0, "scaleX": 1.0, "scaleY": 1.0 } },
+          "0.3": { "body": { "x": 0, "y": 0, "rot": 0, "scaleX": 1.2, "scaleY": 0.7 } },
+          "0.6": { "body": { "x": 0, "y": 3, "rot": 0, "scaleX": 1.4, "scaleY": 0.5 } },
+          "0.8": { "body": { "x": 0, "y": 5, "rot": 0, "scaleX": 1.6, "scaleY": 0.3 } },
+          "1.0": { "body": { "x": 0, "y": 6, "rot": 0, "scaleX": 1.8, "scaleY": 0.1 } }
+        }
+      },
+      "relax": {
+        "duration": 3.0,
+        "bones": [{ "id": "body", "sprite": "qiaolezi", "pivotX": 0, "pivotY": 0 }],
+        "keyframes": {
+          "0": { "body": { "x": 0, "y": 0, "rot": 0, "scaleX": 1.0, "scaleY": 1.0 } },
+          "0.75": { "body": { "x": 0, "y": -1, "rot": 2, "scaleX": 1.0, "scaleY": 1.01 } },
+          "1.5": { "body": { "x": 0, "y": 0, "rot": 0, "scaleX": 1.0, "scaleY": 1.0 } },
+          "2.25": { "body": { "x": 0, "y": -1, "rot": -2, "scaleX": 1.0, "scaleY": 1.01 } },
+          "3.0": { "body": { "x": 0, "y": 0, "rot": 0, "scaleX": 1.0, "scaleY": 1.0 } }
+        }
+      }
+    }
+  },
+  "ai": {
+    "profile": "turret",
+    "behaviourTree": {
+      "rootId": "node_1",
+      "nodes": {
+        "node_1": { "id": "node_1", "type": "ActivePriority", "name": "防御塔优先级" },
+        "node_2": { "id": "node_2", "type": "Sequence", "name": "远程攻击序列" },
+        "node_2a": { "id": "node_2a", "type": "Task", "taskName": "HasEnemy" },
+        "node_2b": { "id": "node_2b", "type": "Task", "taskName": "InAttackRange" },
+        "node_2c": { "id": "node_2c", "type": "Task", "taskName": "RangedAttack", "params": { "bulletSpeed": 10, "bulletEffect": "", "hitEffect": "", "muzzleEffect": "", "bulletColor": "#8b4513", "damageMultiplier": 1.0, "angularSpeed": 360 } },
+        "node_3": { "id": "node_3", "type": "Task", "taskName": "Guard" }
+      },
+      "edges": [
+        { "from": "node_1", "to": "node_2", "order": 1 },
+        { "from": "node_1", "to": "node_3", "order": 2 },
+        { "from": "node_2", "to": "node_2a", "order": 1 },
+        { "from": "node_2", "to": "node_2b", "order": 2 },
+        { "from": "node_2", "to": "node_2c", "order": 3 }
+      ]
+    }
+  }
+}
