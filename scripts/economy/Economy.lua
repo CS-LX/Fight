@@ -26,7 +26,7 @@ M.Config = {
     -- 赞助观战最低押注
     SPONSOR_MIN_BET = 20,
     -- 赞助观战最高押注
-    SPONSOR_MAX_BET = 200,
+    SPONSOR_MAX_BET = 5000,
     -- 赞助赔率（猜对时倍数，含本金）
     SPONSOR_WIN_MULTIPLIER = 1.8,
     -- 观战不押注的基础奖励（参与奖）

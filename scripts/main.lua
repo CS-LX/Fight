@@ -24,6 +24,7 @@ local CloudScore = require("economy.CloudScore")
 local SponsorPool = require("economy.SponsorPool")
 local AIProfile = require("logic.AIProfile")
 local Anim = require("ui.UIAnimations")
+local SpectateUI = require("ui.SpectateUI")
 local UI = require("urhox-libs/UI")
 -- LLM 网络模块（当前仅预留，需 persistent_world 服务端支持）
 -- local LLMClient = require("network.Client")
@@ -939,7 +940,6 @@ function EnterSpectateSetup()
     end
 
     -- 显示赞助观战 UI（押注选择 + 战斗HUD）
-    local SpectateUI = require("ui.SpectateUI")
     SpectateUI.Open({
         spineLayer = spineLayer,
         redCount = redCount,
@@ -1103,6 +1103,7 @@ function HandleUpdate(eventType, eventData)
     local dt = eventData["TimeStep"]:GetFloat()
     UpdateSplash(dt)
     Anim.Update(dt)
+    SpectateUI.Update(dt)
     UpdateGameLogic(dt)
 end
 

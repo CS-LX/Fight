@@ -52,6 +52,10 @@ local onCancel_ = nil
 --- 当前选择
 local selectedTeam_ = "red"   -- "red" | "blue"
 local betAmount_ = 50         -- 默认押注额
+local isAllIn_ = false        -- 是否全押
+local rainbowHue_ = 0         -- 彩虹色相
+---@type Widget|nil
+local fightBtn_ = nil         -- FIGHT按钮引用（用于变色）
 
 -- ============================================================================
 -- 公开接口
@@ -77,6 +81,8 @@ function M.Close()
     onConfirmBet_ = nil
     onSkipBet_ = nil
     onCancel_ = nil
+    isAllIn_ = false
+    fightBtn_ = nil
     if root_ then
         UI.SetRoot(nil)
         root_ = nil
@@ -117,153 +123,198 @@ function M.BuildUI(redCount, blueCount, spineLayer)
     }
 
     -- === 底部押注栏 ===
-    -- 队伍选择指示
-    local teamLabel = UI.Label {
-        text = "RED",
-        fontSize = 12,
-        fontWeight = "bold",
-        fontColor = COLORS.redText,
-    }
+    -- 底边栏背景色：随押注方变化
+    local BAR_COLOR_RED  = { 120, 30, 35, 240 }
+    local BAR_COLOR_BLUE = { 25, 60, 130, 240 }
 
     -- 押注金额显示
     local betLabel = UI.Label {
         text = betAmount_ .. "G",
-        fontSize = 14,
+        fontSize = 13,
         fontWeight = "bold",
         fontColor = COLORS.gold,
     }
 
-    local bottomBar = UI.Panel {
+    --- HSV→RGB 转换（h: 0~360, s/v: 0~1）
+    local function HSVtoRGB(h, s, v)
+        local c = v * s
+        local x = c * (1 - math.abs((h / 60) % 2 - 1))
+        local m = v - c
+        local r, g, b = 0, 0, 0
+        if h < 60 then r, g, b = c, x, 0
+        elseif h < 120 then r, g, b = x, c, 0
+        elseif h < 180 then r, g, b = 0, c, x
+        elseif h < 240 then r, g, b = 0, x, c
+        elseif h < 300 then r, g, b = x, 0, c
+        else r, g, b = c, 0, x
+        end
+        return math.floor((r + m) * 255), math.floor((g + m) * 255), math.floor((b + m) * 255)
+    end
+
+    --- 更新 all-in 状态及 FIGHT 按钮颜色
+    local function UpdateAllInState()
+        isAllIn_ = (betAmount_ >= maxBet) or (betAmount_ >= 5000)
+        if not isAllIn_ and fightBtn_ then
+            fightBtn_:SetBackgroundColor(COLORS.primary)
+        end
+    end
+
+    -- FIGHT 按钮
+    local fightBtn = UI.Button {
+        text = "FIGHT!",
+        width = 100, height = 36,
+        fontSize = 12, fontWeight = "bold",
+        backgroundColor = COLORS.primary,
+        boxShadow = PIXEL_SHADOW,
+        onClick = function()
+            if betAmount_ > 0 and betAmount_ > balance then return end
+            local cb = (betAmount_ > 0) and onConfirmBet_ or onSkipBet_
+            local amount = betAmount_
+            local team = selectedTeam_
+            M.Close()
+            if amount > 0 then
+                UI.Toast { text = string.format("-%dG 押注%s方", amount, team), duration = 2000 }
+                if cb then cb(amount, team) end
+            else
+                UI.Toast { text = "免费观战", duration = 1500 }
+                if cb then cb() end
+            end
+        end,
+    }
+    fightBtn_ = fightBtn
+
+    ---@type Widget
+    local bottomBar
+    bottomBar = UI.Panel {
         width = "100%",
         position = "absolute",
         bottom = 0, left = 0,
-        backgroundColor = { 20, 20, 45, 240 },
+        backgroundColor = BAR_COLOR_RED,  -- 默认红方
         borderColor = COLORS.border,
         borderTopWidth = 2,
-        padding = 10,
-        paddingLeft = 16,
-        paddingRight = 16,
+        padding = 8,
+        paddingLeft = 12,
+        paddingRight = 12,
         flexDirection = "row",
         alignItems = "center",
         justifyContent = "space-between",
         children = {
-            -- 左: 队伍选择
+            -- 左: 押红 + 返回
             UI.Panel {
-                flexDirection = "row",
+                flexDirection = "column",
                 alignItems = "center",
-                gap = 6,
+                gap = 4,
                 children = {
-                    UI.Label { text = "押注", fontSize = 10, fontColor = COLORS.textMuted },
                     UI.Button {
                         text = "俺寻思红队能赢",
-                        width = 140, height = 28,
+                        width = 130, height = 30,
                         fontSize = 10, fontWeight = "bold",
                         backgroundColor = COLORS.redText,
                         boxShadow = PIXEL_SHADOW,
                         onClick = function()
                             selectedTeam_ = "red"
-                            teamLabel:SetText("RED")
-                            teamLabel:SetFontColor(COLORS.redText)
+                            bottomBar:SetBackgroundColor(BAR_COLOR_RED)
                         end,
                     },
                     UI.Button {
+                        text = "返回",
+                        width = 60, height = 24,
+                        fontSize = 9,
+                        backgroundColor = COLORS.surfaceHover,
+                        borderWidth = 1,
+                        borderColor = COLORS.border,
+                        onClick = function()
+                            local cb = onCancel_
+                            M.Close()
+                            if cb then cb() end
+                        end,
+                    },
+                },
+            },
+            -- 中: 金额调节 + ALL IN + FIGHT
+            UI.Panel {
+                flexDirection = "column",
+                alignItems = "center",
+                gap = 4,
+                children = {
+                    -- 金额调节行
+                    UI.Panel {
+                        flexDirection = "row",
+                        alignItems = "center",
+                        gap = 4,
+                        children = {
+                            UI.Button {
+                                text = "-",
+                                width = 26, height = 24,
+                                fontSize = 12,
+                                boxShadow = PIXEL_SHADOW,
+                                onClick = function()
+                                    betAmount_ = math.max(0, betAmount_ - 50)
+                                    betLabel:SetText(betAmount_ .. "G")
+                                    UpdateAllInState()
+                                end,
+                            },
+                            betLabel,
+                            UI.Button {
+                                text = "+",
+                                width = 26, height = 24,
+                                fontSize = 12,
+                                boxShadow = PIXEL_SHADOW,
+                                onClick = function()
+                                    betAmount_ = math.min(maxBet, betAmount_ + 50)
+                                    betLabel:SetText(betAmount_ .. "G")
+                                    UpdateAllInState()
+                                end,
+                            },
+                            UI.Label {
+                                text = "/ " .. balance .. "G",
+                                fontSize = 8,
+                                fontColor = { 200, 200, 220, 200 },
+                            },
+                            UI.Button {
+                                text = "ALL IN",
+                                width = 56, height = 24,
+                                fontSize = 9, fontWeight = "bold",
+                                backgroundColor = { 200, 50, 200, 255 },
+                                boxShadow = PIXEL_SHADOW,
+                                onClick = function()
+                                    betAmount_ = maxBet
+                                    betLabel:SetText(betAmount_ .. "G")
+                                    isAllIn_ = true
+                                end,
+                            },
+                        },
+                    },
+                    -- FIGHT 按钮
+                    fightBtn,
+                },
+            },
+            -- 右: 押蓝 + 只看
+            UI.Panel {
+                flexDirection = "column",
+                alignItems = "center",
+                gap = 4,
+                children = {
+                    UI.Button {
                         text = "显然是蓝队更厉害",
-                        width = 140, height = 28,
+                        width = 130, height = 30,
                         fontSize = 10, fontWeight = "bold",
                         backgroundColor = COLORS.blueText,
                         boxShadow = PIXEL_SHADOW,
                         onClick = function()
                             selectedTeam_ = "blue"
-                            teamLabel:SetText("BLUE")
-                            teamLabel:SetFontColor(COLORS.blueText)
-                        end,
-                    },
-                    teamLabel,
-                },
-            },
-            -- 中: 金额调节
-            UI.Panel {
-                flexDirection = "row",
-                alignItems = "center",
-                gap = 6,
-                children = {
-                    UI.Button {
-                        text = "-",
-                        width = 28, height = 28,
-                        fontSize = 12,
-                        boxShadow = PIXEL_SHADOW,
-                        onClick = function()
-                            betAmount_ = math.max(0, betAmount_ - 10)
-                            betLabel:SetText(betAmount_ .. "G")
-                        end,
-                    },
-                    betLabel,
-                    UI.Button {
-                        text = "+",
-                        width = 28, height = 28,
-                        fontSize = 12,
-                        boxShadow = PIXEL_SHADOW,
-                        onClick = function()
-                            betAmount_ = math.min(maxBet, betAmount_ + 10)
-                            betLabel:SetText(betAmount_ .. "G")
-                        end,
-                    },
-                    UI.Label {
-                        text = "/ " .. balance .. "G",
-                        fontSize = 9,
-                        fontColor = COLORS.textMuted,
-                    },
-                },
-            },
-            -- 右: 操作按钮
-            UI.Panel {
-                flexDirection = "row",
-                alignItems = "center",
-                gap = 8,
-                children = {
-                    UI.Button {
-                        text = "FIGHT!",
-                        width = 80, height = 32,
-                        fontSize = 11, fontWeight = "bold",
-                        backgroundColor = COLORS.primary,
-                        boxShadow = PIXEL_SHADOW,
-                        onClick = function()
-                            if betAmount_ > 0 and betAmount_ > balance then return end
-                            local cb = (betAmount_ > 0) and onConfirmBet_ or onSkipBet_
-                            local amount = betAmount_
-                            local team = selectedTeam_
-                            M.Close()
-                            if amount > 0 then
-                                UI.Toast { text = string.format("-%dG 押注%s方", amount, team), duration = 2000 }
-                                if cb then cb(amount, team) end
-                            else
-                                UI.Toast { text = "免费观战", duration = 1500 }
-                                if cb then cb() end
-                            end
+                            bottomBar:SetBackgroundColor(BAR_COLOR_BLUE)
                         end,
                     },
                     UI.Button {
                         text = "只看",
-                        width = 52, height = 32,
-                        fontSize = 10,
+                        width = 60, height = 24,
+                        fontSize = 9,
                         backgroundColor = COLORS.surfaceHover,
-                        borderWidth = 2,
+                        borderWidth = 1,
                         borderColor = COLORS.border,
                         onClick = function()
                             local cb = onSkipBet_
-                            M.Close()
-                            if cb then cb() end
-                        end,
-                    },
-                    UI.Button {
-                        text = "返回",
-                        width = 52, height = 32,
-                        fontSize = 10,
-                        backgroundColor = COLORS.surfaceHover,
-                        borderWidth = 2,
-                        borderColor = COLORS.border,
-                        onClick = function()
-                            local cb = onCancel_
                             M.Close()
                             if cb then cb() end
                         end,
@@ -292,6 +343,34 @@ function M.BuildUI(redCount, blueCount, spineLayer)
     -- 入场动效
     Anim.SlideInFromTop(topBar, { duration = 0.4, distance = 40, ease = "cubicout" })
     Anim.SlideInFromBottom(bottomBar, { duration = 0.5, distance = 60, ease = "backout", delay = 0.15 })
+end
+
+-- ============================================================================
+-- 彩虹 FIGHT 按钮更新（每帧调用）
+-- ============================================================================
+
+--- 在 HandleUpdate 中调用此函数驱动彩虹效果
+---@param dt number
+function M.Update(dt)
+    if not isOpen_ or not isAllIn_ or not fightBtn_ then return end
+    rainbowHue_ = (rainbowHue_ + dt * 200) % 360  -- 每秒转200度
+    local r, g, b = 0, 0, 0
+    -- HSV→RGB inline（s=0.9, v=1.0）
+    local h = rainbowHue_
+    local c = 0.9
+    local x = c * (1 - math.abs((h / 60) % 2 - 1))
+    local m = 0.1
+    if h < 60 then r, g, b = c, x, 0
+    elseif h < 120 then r, g, b = x, c, 0
+    elseif h < 180 then r, g, b = 0, c, x
+    elseif h < 240 then r, g, b = 0, x, c
+    elseif h < 300 then r, g, b = x, 0, c
+    else r, g, b = c, 0, x
+    end
+    local cr = math.floor((r + m) * 255)
+    local cg = math.floor((g + m) * 255)
+    local cb = math.floor((b + m) * 255)
+    fightBtn_:SetBackgroundColor({ cr, cg, cb, 255 })
 end
 
 return M
